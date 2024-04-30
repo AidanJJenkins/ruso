@@ -3,7 +3,11 @@ package main
 import (
 	"fmt"
 
+	"os"
+	"os/user"
+
 	tree "github.com/aidanjjenkins/bplustree"
+	"github.com/aidanjjenkins/compiler/repl"
 )
 
 func assert(cond bool) {
@@ -44,11 +48,19 @@ func (p *Pool) search(key string) {
 }
 
 func main() {
-	pool := newPool()
-	fmt.Println("Database opened")
-
-	fmt.Println(pool.db.Path)
+	// pool := newPool()
+	// fmt.Println("Database opened")
+	//
+	// fmt.Println(pool.db.Path)
 	// pool.add("winnie", "stella")
-	pool.search("winnie")
-	fmt.Println("Database closing")
+	// pool.search("winnie")
+	// fmt.Println("Database closing")
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Hello %s! This is the Monkey programming language!\n",
+		user.Username)
+	fmt.Printf("Feel free to type in commands\n")
+	repl.Start(os.Stdin, os.Stdout)
 }

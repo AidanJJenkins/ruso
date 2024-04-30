@@ -15,6 +15,7 @@ const (
 
 	//types
 	INTEGER = "INTEGER"
+	STRING  = "STRING"
 
 	ASSIGN = "="
 	ALL    = "*"
@@ -44,6 +45,7 @@ const (
 	BOOL    = "BOOL"
 	INT     = "INT"
 	UNIQUE  = "UNIQUE"
+	AND     = "AND"
 )
 
 var keywords = map[string]TokenType{
@@ -64,6 +66,7 @@ var keywords = map[string]TokenType{
 	"VARCHAR": VARCHAR,
 	"BOOL":    BOOL,
 	"INT":     INT,
+	"AND":     AND,
 }
 
 func LookupIdentifierType(ident string) TokenType {
