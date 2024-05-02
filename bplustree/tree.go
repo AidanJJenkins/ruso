@@ -302,7 +302,7 @@ func nodeInsert(
 func (tree *BTree) Insert(key []byte, val []byte) {
 	assert(len(key) != 0)
 	assert(len(key) <= BTREE_MAX_KEY_SIZE)
-	assert(len(val) <= BTREE_MAX_VAL_SIZE)
+	// assert(len(val) <= BTREE_MAX_VAL_SIZE)
 
 	if tree.Root == 0 {
 		// create the first node

@@ -2,48 +2,13 @@ package main
 
 import (
 	"fmt"
-
-	"os"
-	"os/user"
-
-	tree "github.com/aidanjjenkins/bplustree"
 	"github.com/aidanjjenkins/compiler/repl"
+	"os"
 )
 
 func assert(cond bool) {
 	if !cond {
 		panic("assertion failure")
-	}
-}
-
-type Pool struct {
-	db  tree.Pager
-	ref map[string]string
-}
-
-func newPool() *Pool {
-	p := &Pool{}
-	p.ref = map[string]string{}
-	p.db.Path = "db.db"
-	err := p.db.Open()
-	if err != nil {
-		fmt.Println("err: ", err)
-	}
-	// assert(err == nil)
-	return p
-}
-
-func (p *Pool) add(key string, val string) {
-	p.db.Set([]byte(key), []byte(val))
-	p.ref[key] = val
-}
-
-func (p *Pool) search(key string) {
-	bytes, found := p.db.Get(key)
-	if found {
-		fmt.Println(">>> ", string(bytes))
-	} else {
-		fmt.Println(">>> Value not found")
 	}
 }
 
@@ -55,12 +20,11 @@ func main() {
 	// pool.add("winnie", "stella")
 	// pool.search("winnie")
 	// fmt.Println("Database closing")
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Hello %s! This is the Monkey programming language!\n",
-		user.Username)
+	// user, err := user.Current()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	fmt.Println("RusoDB started!")
 	fmt.Printf("Feel free to type in commands\n")
 	repl.Start(os.Stdin, os.Stdout)
 }
