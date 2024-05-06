@@ -7,11 +7,11 @@ import (
 )
 
 func TestNextToke(t *testing.T) {
-	input := `INSERT INTO dogs (id, name) VALUES (1, 'Winnie');
+	input := `INSERT INTO dogs (id, name) VALUES (1, "Winnie");
 
 	SELECT * FROM dogs;
 
-	UPDATE dogs SET age = 3 WHERE name = 'Winnie';
+	UPDATE dogs SET age = 3 WHERE name = "Winnie";
 
 	CREATE TABLE dogs (
 		name VARCHAR(255) UNIQUE,
@@ -19,6 +19,8 @@ func TestNextToke(t *testing.T) {
 	);
 
 	DELETE * FROM dogs;
+
+	INSERT INTO dogs (name, breed) VALUES ("Winnie", "cane corso");
 `
 	tests := []struct {
 		expectedType    token.TokenType
@@ -36,9 +38,7 @@ func TestNextToke(t *testing.T) {
 		{token.LPAREN, "("},
 		{token.INTEGER, "1"},
 		{token.COMMA, ","},
-		{token.SQUOTE, "'"},
-		{token.IDENT, "Winnie"},
-		{token.SQUOTE, "'"},
+		{token.STRING, "Winnie"},
 		{token.RPAREN, ")"},
 		{token.SEMICOLON, ";"},
 		{token.SELECT, "SELECT"},
@@ -55,9 +55,7 @@ func TestNextToke(t *testing.T) {
 		{token.WHERE, "WHERE"},
 		{token.IDENT, "name"},
 		{token.ASSIGN, "="},
-		{token.SQUOTE, "'"},
-		{token.IDENT, "Winnie"},
-		{token.SQUOTE, "'"},
+		{token.STRING, "Winnie"},
 		{token.SEMICOLON, ";"},
 		{token.CREATE, "CREATE"},
 		{token.TABLE, "TABLE"},
@@ -78,6 +76,21 @@ func TestNextToke(t *testing.T) {
 		{token.ALL, "*"},
 		{token.FROM, "FROM"},
 		{token.IDENT, "dogs"},
+		{token.SEMICOLON, ";"},
+		{token.INSERT, "INSERT"},
+		{token.INTO, "INTO"},
+		{token.IDENT, "dogs"},
+		{token.LPAREN, "("},
+		{token.IDENT, "name"},
+		{token.COMMA, ","},
+		{token.IDENT, "breed"},
+		{token.RPAREN, ")"},
+		{token.VALUES, "VALUES"},
+		{token.LPAREN, "("},
+		{token.STRING, "Winnie"},
+		{token.COMMA, ","},
+		{token.STRING, "cane corso"},
+		{token.RPAREN, ")"},
 		{token.SEMICOLON, ";"},
 	}
 

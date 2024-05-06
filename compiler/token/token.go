@@ -13,7 +13,6 @@ const (
 
 	IDENT = "IDENT"
 
-	//types
 	INTEGER = "INTEGER"
 	STRING  = "STRING"
 
@@ -22,12 +21,11 @@ const (
 
 	COMMA     = ","
 	SEMICOLON = ";"
-	SQUOTE    = "'"
+	QUOTE     = "\""
 
 	LPAREN = "("
 	RPAREN = ")"
 
-	// keywords
 	INSERT  = "INSERT"
 	INTO    = "INTO"
 	SELECT  = "SELECT"

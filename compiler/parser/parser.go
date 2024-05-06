@@ -102,32 +102,15 @@ func (p *Parser) parseSet() (*ast.Identifier, string, bool) {
 	if !p.expectPeek(token.ASSIGN) {
 		return nil, "", false
 	}
-	if p.peekToken.Type == token.INTEGER {
-		if !p.expectPeek(token.INTEGER) {
-			return nil, "", false
-		}
-		value := p.curToken.Literal
-		p.nextToken()
-		return col, value, true
-	} else {
 
-		if !p.expectPeek(token.SQUOTE) {
-			return nil, "", false
-		}
-
-		if !p.expectPeek(token.IDENT) {
-			return nil, "", false
-		}
-
-		value := p.curToken.Literal
-
-		if !p.expectPeek(token.SQUOTE) {
-			return nil, "", false
-		}
-
-		p.nextToken()
-		return col, value, true
+	if !p.expectPeek(token.STRING) {
+		return nil, "", false
 	}
+
+	value := p.curToken.Literal
+
+	p.nextToken()
+	return col, value, true
 }
 
 func (p *Parser) parseDeleteStatement() *ast.DeleteStatement {
@@ -212,29 +195,13 @@ func (p *Parser) parseCondition() *ast.Condition {
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}
-	if p.peekToken.Type == token.INTEGER {
-		if !p.expectPeek(token.INTEGER) {
-			return nil
-		}
-		cond.CIdent = &ast.Identifier{Token: p.curToken, Val: p.curToken.Literal}
-		p.nextToken()
-		return cond
-	} else {
-		if !p.expectPeek(token.SQUOTE) {
-			return nil
-		}
-
-		if !p.expectPeek(token.IDENT) {
-			return nil
-		}
-		cond.CIdent = &ast.Identifier{Token: p.curToken, Val: p.curToken.Literal}
-
-		if !p.expectPeek(token.SQUOTE) {
-			return nil
-		}
-
-		p.nextToken()
+	if !p.expectPeek(token.STRING) {
+		return nil
 	}
+
+	cond.CIdent = p.curToken.Literal
+
+	p.nextToken()
 	return cond
 }
 
@@ -275,33 +242,10 @@ func (p *Parser) parseInsertStatement() *ast.InsertStatement {
 }
 
 func (p *Parser) parseInsertValues() (string, bool) {
-	if !p.expectPeek(token.SQUOTE) {
+	if !p.expectPeek(token.STRING) {
 		return "", false
 	}
-	if p.peekToken.Type == token.INTEGER {
-		if !p.expectPeek(token.INTEGER) {
-			return "", false
-		}
-		res := p.curToken.Literal
-		if !p.expectPeek(token.SQUOTE) {
-			return "", false
-		}
-
-		if p.curTokenIs(token.RPAREN) {
-			return res, true
-		}
-		p.nextToken()
-		return res, true
-	}
-	if !p.expectPeek(token.IDENT) {
-		return "", false
-	}
-
 	res := p.curToken.Literal
-
-	if !p.expectPeek(token.SQUOTE) {
-		return "", false
-	}
 
 	if p.curTokenIs(token.RPAREN) {
 		return res, true

@@ -15,7 +15,6 @@ const PROMPT = ">>> "
 
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	vm := vm.New()
 
 	// vm.Pool.Search("dogs")
 	for {
@@ -35,11 +34,18 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		obj := compile.Compile(program)
-
-		err := vm.Run(obj)
+		comp := compile.New()
+		err := comp.Compile(program)
 		if err != nil {
-			fmt.Println("error running")
+			fmt.Println("Compile error: ", err)
+			return
+		}
+
+		machine := vm.New(comp.Bytecode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Println("Error running")
+			return
 		}
 
 		fmt.Println(">>> Executed.")

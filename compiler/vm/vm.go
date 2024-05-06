@@ -3,10 +3,10 @@ package vm
 import (
 	"encoding/binary"
 	"fmt"
-	"os"
 
 	tree "github.com/aidanjjenkins/bplustree"
-	// "github.com/aidanjjenkins/compiler/code"
+	"github.com/aidanjjenkins/compiler/code"
+	"github.com/aidanjjenkins/compiler/compile"
 )
 
 type Pool struct {
@@ -27,12 +27,13 @@ func newPool() *Pool {
 }
 
 type VM struct {
-	Pool *Pool
+	Pool         *Pool
+	Instructions code.Instructions
 }
 
-func New() *VM {
+func New(bytecode *compile.Bytecode) *VM {
 	Pool := newPool()
-	vm := VM{Pool: Pool}
+	vm := VM{Pool: Pool, Instructions: bytecode.Instructions}
 
 	return &vm
 }
@@ -57,67 +58,7 @@ func (p *Pool) Search(key string) {
 }
 
 func (vm *VM) Run() error {
+	ins := vm.Instructions
+	fmt.Println("instructions: ", ins)
 	return nil
-}
-
-func writeToRowsFile(value []byte) (uint32, error) {
-	// Open or create a file to write the value
-	file, err := os.OpenFile("rows.db", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	// Get the current offset in the file
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return 0, err
-	}
-	offset := uint32(fileInfo.Size())
-	fmt.Println("offset: ", offset)
-
-	// Write the value to the file
-	_, err = file.Write(value)
-	if err != nil {
-		return 0, err
-	}
-
-	// Return the offset (location) and length of the row in the file
-	return offset, nil
-}
-
-// func accessMetaData() map[string]any {
-// 	m := make(map[string]any)
-// }
-
-func readFromRows(offset int64) ([]byte, error) {
-	// Open the file to read from
-	file, err := os.Open("rows.db")
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Seek to the specified offset
-	_, err = file.Seek(offset, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	// Read the length of the value
-	lengthBytes := make([]byte, 4) // Assuming int64 for length
-	_, err = file.Read(lengthBytes)
-	if err != nil {
-		return nil, err
-	}
-	length := int64(binary.LittleEndian.Uint32(lengthBytes))
-
-	// Read the value from the file
-	value := make([]byte, length)
-	_, err = file.Read(value)
-	if err != nil {
-		return nil, err
-	}
-
-	return value, nil
 }

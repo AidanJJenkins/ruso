@@ -27,8 +27,8 @@ func TestUpdateStatement(t *testing.T) {
 		expectedCond    []string
 		expectedCondVal []string
 	}{
-		{"UPDATE dogs SET name = 'stella', breed = 'labradoodle' WHERE name = 'Winnie';", "dogs", []string{"name", "breed"}, []string{"stella", "labradoodle"}, []string{"name"}, []string{"Winnie"}},
-		{"UPDATE dogs SET name = 'stella', breed = 'labradoodle', age = 3 WHERE name = 'Winnie';", "dogs", []string{"name", "breed", "age"}, []string{"stella", "labradoodle", "3"}, []string{"name"}, []string{"Winnie"}},
+		{"UPDATE dogs SET name = \"stella\", breed = \"labradoodle\" WHERE name = \"Winnie\";", "dogs", []string{"name", "breed"}, []string{"stella", "labradoodle"}, []string{"name"}, []string{"Winnie"}},
+		{"UPDATE dogs SET name = \"winnie\", breed = \"cane corso\" WHERE name = \"stella\";", "dogs", []string{"name", "breed"}, []string{"winnie", "cane corso"}, []string{"name"}, []string{"stella"}},
 	}
 
 	for _, tt := range tests {
@@ -51,35 +51,35 @@ func testUpdateStatement(t *testing.T, s ast.Statement, name string, colName, va
 		return false
 	}
 
-	letStmt, ok := s.(*ast.UpdateStatement)
+	stmt, ok := s.(*ast.UpdateStatement)
 	if !ok {
 		t.Errorf("s not *ast.Delete. got=%T", s)
 		return false
 	}
 
-	if letStmt.TName.Val != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.TName.Val)
+	if stmt.TName.Val != name {
+		t.Errorf("stmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
 
 	for i := range val {
-		if letStmt.Cols[i].Val != colName[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], letStmt.Cols[i])
+		if stmt.Cols[i].Val != colName[i] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Cols[i])
 			return false
 		}
-		if letStmt.Values[i] != val[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], letStmt.Values[i])
+		if stmt.Values[i] != val[i] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Values[i])
 			return false
 		}
 	}
 
 	for j := range condVal {
-		if letStmt.Condition[j].CName.Val != condName[j] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", condName[j], letStmt.Condition[j].CName.Val)
+		if stmt.Condition[j].CName.Val != condName[j] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", condName[j], stmt.Condition[j].CName.Val)
 			return false
 		}
-		if letStmt.Condition[j].CIdent.Val != condVal[j] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", condVal[j], letStmt.Condition[j].CIdent.Val)
+		if stmt.Condition[j].CIdent != condVal[j] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", condVal[j], stmt.Condition[j].CIdent)
 			return false
 		}
 	}
@@ -93,9 +93,8 @@ func TestInsertStatement(t *testing.T) {
 		expectedIdentifier string
 		expectedVal        []string
 	}{
-		{"INSERT INTO dogs ('stella', 'labradoodle');", "dogs", []string{"stella", "labradoodle"}},
-		{"INSERT INTO dogs ('stella', 'labradoodle', '7');", "dogs", []string{"stella", "labradoodle", "7"}},
-		{"INSERT INTO dogs ('stella', 'labradoodle', '7', 'untrained');", "dogs", []string{"stella", "labradoodle", "7", "untrained"}},
+		{"INSERT INTO dogs (\"stella\", \"labradoodle\");", "dogs", []string{"stella", "labradoodle"}},
+		{"INSERT INTO dogs (\"winnie\", \"cane corso\", \"3\" );", "dogs", []string{"winnie", "cane corso", "3"}},
 	}
 
 	for _, tt := range tests {
@@ -118,20 +117,20 @@ func testInsertStatement(t *testing.T, s ast.Statement, name string, val []strin
 		return false
 	}
 
-	letStmt, ok := s.(*ast.InsertStatement)
+	stmt, ok := s.(*ast.InsertStatement)
 	if !ok {
 		t.Errorf("s not *ast.Delete. got=%T", s)
 		return false
 	}
 
-	if letStmt.TName.Val != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.TName.Val)
+	if stmt.TName.Val != name {
+		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
 
 	for i := range val {
-		if letStmt.Values[i] != val[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], letStmt.Values[i])
+		if stmt.Values[i] != val[i] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Values[i])
 			return false
 		}
 	}
@@ -146,9 +145,9 @@ func TestDeleteStatement(t *testing.T) {
 		expectedCol        []string
 		expectedVal        []string
 	}{
-		{"DELETE FROM dogs WHERE name = 'stella';", "dogs", []string{"name"}, []string{"stella"}},
-		{"DELETE FROM dogs WHERE name = 'stella' AND breed = 'labradoodle';", "dogs", []string{"name", "breed"}, []string{"stella", "labradoodle"}},
-		{"DELETE FROM dogs WHERE name = 'stella' AND breed = 'labradoodle' AND age = 7;", "dogs", []string{"name", "breed", "age"}, []string{"stella", "labradoodle", "7"}},
+		{"DELETE FROM dogs WHERE name = \"stella\";", "dogs", []string{"name"}, []string{"stella"}},
+		{"DELETE FROM dogs WHERE breed = \"cane corso\";", "dogs", []string{"breed"}, []string{"cane corso"}},
+		{"DELETE FROM dogs WHERE name = \"stella\" AND breed = \"labradoodle\" AND age = \"7\";", "dogs", []string{"name", "breed", "age"}, []string{"stella", "labradoodle", "7"}},
 	}
 
 	for _, tt := range tests {
@@ -171,14 +170,14 @@ func testDeleteStatement(t *testing.T, s ast.Statement, name string, cols, val [
 		return false
 	}
 
-	letStmt, ok := s.(*ast.DeleteStatement)
+	stmt, ok := s.(*ast.DeleteStatement)
 	if !ok {
 		t.Errorf("s not *ast.Delete. got=%T", s)
 		return false
 	}
 
-	if letStmt.TName.Val != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.TName.Val)
+	if stmt.TName.Val != name {
+		t.Errorf("stmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
 
@@ -188,24 +187,24 @@ func testDeleteStatement(t *testing.T, s ast.Statement, name string, cols, val [
 			return false
 		}
 		for i := range cols {
-			if letStmt.Condition[i].CName.Val != cols[i] {
-				t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], letStmt.Condition[i].CName.Val)
+			if stmt.Condition[i].CName.Val != cols[i] {
+				t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], stmt.Condition[i].CName.Val)
 				return false
 			}
 
-			if letStmt.Condition[i].CIdent.Val != val[i] {
-				t.Errorf("Where clause identifier value expected: '%s'. got=%s", val, letStmt.Condition[i].CIdent.Val)
+			if stmt.Condition[i].CIdent != val[i] {
+				t.Errorf("Where clause identifier value expected: '%s'. got=%s", val, stmt.Condition[i].CIdent)
 				return false
 			}
 		}
 	} else {
-		if letStmt.Condition[0].CName.Val != cols[0] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[0], letStmt.Condition[0].CIdent.Val)
+		if stmt.Condition[0].CName.Val != cols[0] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[0], stmt.Condition[0].CName.Val)
 			return false
 		}
 
-		if letStmt.Condition[0].CIdent.Val != val[0] {
-			t.Errorf("Where clause CIdent value expected: '%s'. got=%s", val, letStmt.Condition[0].CName.Val)
+		if stmt.Condition[0].CIdent != val[0] {
+			t.Errorf("Where clause CIdent value expected: '%s'. got=%s", val, stmt.Condition[0].CIdent)
 			return false
 		}
 	}
@@ -221,9 +220,8 @@ func TestSelectStatement(t *testing.T) {
 		expectedCol        []string
 		expectedVal        []string
 	}{
-		{"SELECT * FROM dogs WHERE name = 'stella';", "*", "dogs", []string{"name"}, []string{"stella"}},
-		{"SELECT * FROM dogs WHERE name = 'stella' AND breed = 'labradoodle';", "*", "dogs", []string{"name", "breed"}, []string{"stella", "labradoodle"}},
-		{"SELECT * FROM dogs WHERE name = 'stella' AND breed = 'labradoodle' AND age = 7;", "*", "dogs", []string{"name", "breed", "age"}, []string{"stella", "labradoodle", "7"}},
+		{"SELECT * FROM dogs WHERE name = \"stella\";", "*", "dogs", []string{"name"}, []string{"stella"}},
+		{"SELECT * FROM dogs WHERE name = \"winnie\" AND breed = \"cane corso\";", "*", "dogs", []string{"name", "breed"}, []string{"winnie", "cane corso"}},
 	}
 
 	for _, tt := range tests {
@@ -246,29 +244,16 @@ func testSelectStatement(t *testing.T, s ast.Statement, name string, cols, val [
 		return false
 	}
 
-	letStmt, ok := s.(*ast.SelectStatement)
+	stmt, ok := s.(*ast.SelectStatement)
 	if !ok {
 		t.Errorf("s not *ast.LetStatement. got=%T", s)
 		return false
 	}
-	// if letStmt.NumCols.Literal != "*" {
-	// 	t.Errorf("letStmt.Name.Value not '%s'. got=%s", cols, letStmt.NumCols)
-	// 	return false
-	// }
 
-	// if letStmt.From.Literal != "FROM" {
-	// 	t.Errorf("letStmt.Name.Value not '%s'. got=%s", "FROM", letStmt.From.Literal)
-	// 	return false
-	// }
-
-	if letStmt.TName.Val != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.TName.Val)
+	if stmt.TName.Val != name {
+		t.Errorf("stmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
-	// if letStmt.Where.Literal != "WHERE" {
-	// 	t.Errorf("Where clause expected 'WHERE' token. got=%s", letStmt.TName.Val)
-	// 	return false
-	// }
 
 	if len(cols) > 1 || len(val) > 1 {
 		if len(cols) != len(val) {
@@ -276,24 +261,24 @@ func testSelectStatement(t *testing.T, s ast.Statement, name string, cols, val [
 			return false
 		}
 		for i := range cols {
-			if letStmt.Condition[i].CName.Val != cols[i] {
-				t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], letStmt.Condition[i].CName.Val)
+			if stmt.Condition[i].CName.Val != cols[i] {
+				t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], stmt.Condition[i].CName.Val)
 				return false
 			}
 
-			if letStmt.Condition[i].CIdent.Val != val[i] {
-				t.Errorf("Where clause identifier value expected: '%s'. got=%s", val, letStmt.Condition[i].CIdent.Val)
+			if stmt.Condition[i].CIdent != val[i] {
+				t.Errorf("Where clause identifier value expected: '%s'. got=%s", val, stmt.Condition[i].CIdent)
 				return false
 			}
 		}
 	} else {
-		if letStmt.Condition[0].CName.Val != cols[0] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[0], letStmt.Condition[0].CIdent.Val)
+		if stmt.Condition[0].CName.Val != cols[0] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[0], stmt.Condition[0].CName.Val)
 			return false
 		}
 
-		if letStmt.Condition[0].CIdent.Val != val[0] {
-			t.Errorf("Where clause CIdent value expected: '%s'. got=%s", val, letStmt.Condition[0].CName.Val)
+		if stmt.Condition[0].CIdent != val[0] {
+			t.Errorf("Where clause CIdent value expected: '%s'. got=%s", val, stmt.Condition[0].CIdent)
 			return false
 		}
 	}
@@ -331,24 +316,24 @@ func testTableStatement(t *testing.T, s ast.Statement, name string, cols, types 
 		return false
 	}
 
-	letStmt, ok := s.(*ast.CreateTableStatement)
+	stmt, ok := s.(*ast.CreateTableStatement)
 	if !ok {
 		t.Errorf("s not *ast.Delete. got=%T", s)
 		return false
 	}
 
-	if letStmt.TName.Val != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.TName.Val)
+	if stmt.TName.Val != name {
+		t.Errorf("stmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
 
 	for i := range cols {
-		if letStmt.Cols[i] != cols[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], letStmt.Cols[i])
+		if stmt.Cols[i] != cols[i] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], stmt.Cols[i])
 			return false
 		}
-		if letStmt.ColTypes[i] != types[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", types[i], letStmt.ColTypes[i])
+		if stmt.ColTypes[i] != types[i] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", types[i], stmt.ColTypes[i])
 			return false
 		}
 	}
@@ -385,20 +370,20 @@ func testCreateIndexStatement(t *testing.T, s ast.Statement, name string, cols [
 		return false
 	}
 
-	letStmt, ok := s.(*ast.CreateIndexStatement)
+	stmt, ok := s.(*ast.CreateIndexStatement)
 	if !ok {
 		t.Errorf("s not *ast.Delete. got=%T", s)
 		return false
 	}
 
-	if letStmt.TName.Val != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.TName.Val)
+	if stmt.TName.Val != name {
+		t.Errorf("stmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
 
 	for i := range cols {
-		if letStmt.Cols[i].Val != cols[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], letStmt.Cols[i])
+		if stmt.Cols[i].Val != cols[i] {
+			t.Errorf("Where clause CName value expected: '%s'. got=%s", cols[i], stmt.Cols[i])
 			return false
 		}
 	}

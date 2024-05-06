@@ -37,7 +37,7 @@ type Identifier struct {
 
 type Condition struct {
 	CName  *Identifier
-	CIdent *Identifier
+	CIdent string
 	And    *Condition
 }
 
