@@ -42,6 +42,12 @@ func (c *Compiler) Compile(node ast.Node) error {
 	case *ast.CreateTableStatement:
 		ins := code.Make(code.OpCreateTable)
 		m := createTableMetaRow(*node)
+
+		rowLen := len(m)
+		n := make([]byte, 8)
+		binary.LittleEndian.PutUint32(n, uint32(rowLen))
+
+		ins = append(ins, n...)
 		ins = append(ins, m...)
 
 		c.Instructions = append(c.Instructions, ins...)
@@ -61,7 +67,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 
 		c.Instructions = append(c.Instructions, ins...)
 	case *ast.UpdateStatement:
-		ins := code.Make(code.OpInsert)
+		ins := code.Make(code.OpUpdate)
 		ins = append(ins, createUpdateInstructions(*node)...)
 
 		c.Instructions = append(c.Instructions, ins...)
@@ -110,6 +116,13 @@ func createTableMetaRow(node ast.CreateTableStatement) []byte {
 
 func AccessFirstByte(ins []byte) int {
 	return int(ins[0])
+}
+
+func AccessTotalRowLength(ins []byte) uint32 {
+	b := ins[1:9]
+	l := binary.LittleEndian.Uint32(b)
+
+	return l
 }
 
 func AccessTableMetaDataIndex(ins []byte) {
@@ -263,18 +276,21 @@ func createUpdateInstructions(node ast.UpdateStatement) []byte {
 
 	cAndV := []byte{}
 	for i := range node.Values {
-		v := []byte(node.Values[i])
-		vLen := make([]byte, Lengths)
-		binary.LittleEndian.PutUint32(vLen, uint32(len(v)))
 
 		c := []byte(node.Cols[i].Val)
 		cLen := make([]byte, Lengths)
 		binary.LittleEndian.PutUint32(cLen, uint32(len(c)))
 
-		cAndV = append(cAndV, vLen...)
-		cAndV = append(cAndV, v...)
 		cAndV = append(cAndV, cLen...)
 		cAndV = append(cAndV, c...)
+
+		v := []byte(node.Values[i])
+		vLen := make([]byte, Lengths)
+		binary.LittleEndian.PutUint32(vLen, uint32(len(v)))
+
+		cAndV = append(cAndV, vLen...)
+		cAndV = append(cAndV, v...)
+
 	}
 
 	colAndValLen := make([]byte, Lengths)
@@ -301,6 +317,41 @@ func createUpdateInstructions(node ast.UpdateStatement) []byte {
 	ins = append(ins, conditions...)
 
 	return ins
+}
+
+func AccessUpdateName(ins []byte) (string, []byte) {
+	ins = ins[1:]
+	nLen := binary.LittleEndian.Uint32(ins[:Lengths])
+	ins = ins[Lengths:]
+
+	name := string(ins[:nLen])
+	ins = ins[nLen:]
+
+	return name, ins
+}
+
+func splitSlice(bytes []byte) ([]byte, []byte) {
+	length := binary.LittleEndian.Uint32(bytes[:Lengths])
+
+	part1 := bytes[Lengths : Lengths+length]
+	part2 := bytes[length+Lengths:]
+
+	return part1, part2
+}
+
+func AccessUpdateValues(data []byte) []string {
+	vals := []string{}
+	for len(data) > 0 {
+		colLength := binary.LittleEndian.Uint32(data[:Lengths])
+		data = data[Lengths:]
+
+		colValue := string(data[:colLength])
+		data = data[colLength:]
+
+		vals = append(vals, colValue)
+	}
+
+	return vals
 }
 
 type Bytecode struct {

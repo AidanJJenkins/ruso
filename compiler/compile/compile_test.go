@@ -1,7 +1,6 @@
 package compile
 
 import (
-	// "fmt"
 	"testing"
 
 	"github.com/aidanjjenkins/compiler/ast"
@@ -62,21 +61,24 @@ func TestAddTable(t *testing.T) {
 func testAddTableStatement(t *testing.T, stmt ast.Statement, comp *Compiler, name string, val []string) bool {
 	comp.Compile(stmt)
 
-	n := AccessTableNameBytes(comp.Instructions)
+	op := AccessFirstByte(comp.Instructions)
+	if op != 6 {
+		t.Errorf("Expected: 6, got: %d", op)
+		return false
+	}
+
+	l := AccessTotalRowLength(comp.Instructions)
+	r := comp.Instructions[8 : l+9]
+
+	n := AccessTableNameBytes(r)
 	if name != n[:len(name)] {
 		t.Errorf("Expected: %s, got: %s", name, n)
 		return false
 	}
 
-	firstByte := AccessFirstByte(comp.Instructions)
-	if firstByte != 6 {
-		t.Errorf("Expected: 6, got: %d", firstByte)
-		return false
-	}
 	// AccessTableMetaDataIndex(comp.Instructions)
-	lens := AccessTableMetaDataLengths(comp.Instructions)
-	vals := AccessTableRowInfoBytes(comp.Instructions[TableMetaDataSize+256:], lens)
-
+	lens := AccessTableMetaDataLengths(r)
+	vals := AccessTableRowInfoBytes(r[TableMetaDataSize+256:], lens)
 	for i := range val {
 		if val[i] != vals[i] {
 			t.Errorf("Expected: %s, got: %s", val[i], vals[i])
@@ -240,9 +242,69 @@ func testInsert(t *testing.T, stmt ast.Statement, comp *Compiler, name string, v
 	iv = iv[1:]
 
 	for i := range vals {
-		inputVal := vals[i]
-		if vals[i] != inputVal[:len(vals[i])] {
-			t.Errorf("Expected: %s, got: %s", vals[i], inputVal)
+		if vals[i] != iv[i] {
+			t.Errorf("Expected: %s, got: %s", vals[i], iv[i])
+			return false
+		}
+	}
+
+	return true
+}
+
+func TestUpdate(t *testing.T) {
+	tests := []struct {
+		input         string
+		expectedTable string
+		expectedVal   []string
+		expectedWhere []string
+	}{
+		{"UPDATE dogs SET name = \"stella\", breed = \"labradoodle\" WHERE name = \"Winnie\";", "dogs", []string{"name", "stella", "breed", "labradoodle"}, []string{"name", "Winnie"}},
+	}
+
+	for _, tt := range tests {
+		program := createParseProgram(tt.input, t)
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+		}
+
+		stmt := program.Statements[0]
+		comp := New()
+
+		if !testUpdate(t, stmt, comp, tt.expectedTable, tt.expectedVal, tt.expectedWhere) {
+			return
+		}
+
+	}
+}
+
+func testUpdate(t *testing.T, stmt ast.Statement, comp *Compiler, name string, vals, where []string) bool {
+	comp.Compile(stmt)
+
+	ins := AccessFirstByte(comp.Instructions)
+	if ins != 11 {
+		t.Errorf("Expected: 11, got: %d", ins)
+		return false
+	}
+
+	n, leftover := AccessUpdateName(comp.Instructions)
+	if name != n[:len(name)] {
+		t.Errorf("Expected: %s, got: %s", name, n)
+		return false
+	}
+	p1, p2 := splitSlice(leftover)
+	v := AccessUpdateValues(p1)
+	w := AccessUpdateValues(p2)
+
+	for i := range vals {
+		if v[i] != vals[i] {
+			t.Errorf("Expected: %s, got: %s", vals[i], v[i])
+			return false
+		}
+	}
+
+	for i := range where {
+		if w[i] != where[i] {
+			t.Errorf("Expected: %s, got: %s", where[i], w[i])
 			return false
 		}
 	}
