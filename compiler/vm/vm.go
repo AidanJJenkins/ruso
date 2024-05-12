@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 
 	tree "github.com/aidanjjenkins/bplustree"
@@ -11,15 +12,22 @@ import (
 	c "github.com/aidanjjenkins/compiler/compile"
 )
 
+const TableFile string = "tables.db"
+const IdxFile string = "index.db"
+const RowsFile string = "rows.db"
+
+type Tbls struct {
+	Cols map[string]string // name -> type
+	Idx  []string
+}
+
 type Pool struct {
 	db tree.Pager
-	// ref map[string]string
 }
 
 func newPool() *Pool {
 	p := &Pool{}
-	// p.ref = map[string]string{}
-	p.db.Path = "db.db"
+	p.db.Path = IdxFile
 	err := p.db.Open()
 	if err != nil {
 		fmt.Println("err: ", err)
@@ -30,10 +38,11 @@ func newPool() *Pool {
 type VM struct {
 	Pool         *Pool
 	Instructions code.Instructions
+	Info         map[string]*Tbls
 }
 
-func New(bytecode *c.Bytecode) *VM {
-	vm := VM{Pool: newPool(), Instructions: bytecode.Instructions}
+func New(bytecode *c.Bytecode, info map[string]*Tbls) *VM {
+	vm := VM{Pool: newPool(), Instructions: bytecode.Instructions, Info: info}
 
 	return &vm
 }
@@ -55,6 +64,18 @@ func (p *Pool) Search(key string) (uint32, bool) {
 	}
 }
 
+type VMError struct {
+	Message string
+}
+
+func (e *VMError) Error() string {
+	return e.Message
+}
+
+func NewError(message string) error {
+	return &VMError{Message: message}
+}
+
 func (vm *VM) Run() error {
 	ins := vm.Instructions
 
@@ -63,9 +84,9 @@ func (vm *VM) Run() error {
 	case code.OpCreateTable:
 		vm.addTable(vm.Instructions)
 	case code.OpCreateIndex:
-		addIndex(vm.Instructions)
+		vm.addIndex(vm.Instructions)
 	case code.OpSelect:
-		search(vm.Instructions)
+		// vm.search(vm.Instructions)
 	case code.OpInsert:
 		add(vm.Instructions)
 	case code.OpUpdate:
@@ -75,12 +96,35 @@ func (vm *VM) Run() error {
 }
 
 func (vm *VM) addTable(ins []byte) {
-	offset, err := writeRow(ins[1:], "test.db")
+	if vm.Info != nil {
+		name := AccessTableNameBytes(ins[1:])
+		if vm.Info[name] != nil {
+			fmt.Println("Table name already exists.")
+			return
+		}
+	}
+
+	offset, err := writeRow(ins[1:], TableFile)
 	if err != nil {
 		fmt.Println("error: ", err)
 	}
 
-	name := accessTableNameBytes(ins[1:])
+	name := AccessTableNameBytes(ins[1:])
+	lens := c.AccessTableMetaDataLengths(ins[1:])
+	vals := c.AccessTableRowInfoBytes(ins[9+c.TableMetaDataSize+255:], lens)
+
+	infoCols := make(map[string]string)
+	i := 0
+	for i < len(vals) {
+		n := vals[i]
+		t := vals[i+1]
+
+		infoCols[n] = t
+		i += 2
+	}
+
+	tbls := &Tbls{Cols: infoCols, Idx: nil}
+	vm.Info[name] = tbls
 
 	vm.Pool.Add([]byte(name), offset)
 }
@@ -91,9 +135,9 @@ func (vm *VM) FindTable(name string) []byte {
 		fmt.Println("key not found")
 		return nil
 	} else {
-		row, err := readRow(int64(offset))
+		row, err := readRow(int64(offset), TableFile)
 		if err != nil {
-			fmt.Println("error: ", err)
+			fmt.Println("Error finding table: ", err)
 		}
 
 		return row
@@ -116,8 +160,28 @@ func writeRow(data []byte, filename string) (uint32, error) {
 	return offset, nil
 }
 
-func readRow(offset int64) ([]byte, error) {
-	file, err := os.Open("test.db")
+func updateSameLength(offset uint32, data []byte) error {
+	file, err := os.OpenFile(TableFile, os.O_RDWR, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Seek(int64(offset), io.SeekStart)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func readRow(offset int64, filename string) ([]byte, error) {
+	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -149,10 +213,6 @@ func accessTotalRowLength(ins []byte) uint32 {
 	return l
 }
 
-// func accessTableMetaDataIndex(ins []byte) {
-// 	fmt.Println("MetaData Index", ins[:1+c.TableIndexSize])
-// }
-
 func accessTableMetaDataLengths(ins []byte) []int {
 	lens := ins[c.TableIndexSize : c.TableIndexSize+c.TableMetaDataLengths]
 	l := []int{}
@@ -180,7 +240,7 @@ func cleanse(substring []byte) string {
 }
 
 // for the insertion
-func accessTableNameBytes(ins []byte) string {
+func AccessTableNameBytes(ins []byte) string {
 	substring := ins[c.TableMetaDataSize+8 : c.TableMetaDataSize+c.TableNameSize]
 	name := cleanse(substring)
 	return name
@@ -208,19 +268,43 @@ func accessTableRowInfoBytes(row []byte, lengths []int) []string {
 	return vals
 }
 
-func addIndex(ins []byte) {
-	fmt.Println("need to implement add index")
-	fmt.Println("instructions: ", ins)
+func AccessIndexName(ins []byte) []byte {
+	return ins[1 : c.TableNameSize+1]
 }
 
-func search(ins []byte) {
-	fmt.Println("need to implement search")
-	fmt.Println("instructions: ", ins)
+func (vm *VM) addIndex(ins []byte) {
+	vals := c.AccessIndexVals(ins)
+
+	t := AccessIndexName(ins)
+	tName := cleanse(t)
+	table := vm.FindTable(tName)
+
+	copy(table[:c.TableMetaDataSize], []byte(vals[0]))
+	updateSameLength(0, table)
 }
+
+// func (vm *VM) search(ins []byte) []byte {
+// vals := c.AccessSelectValues(ins)
+// fmt.Println("vals", vals)
+//
+// tableName := vals[0]
+// col := vals[1]
+// val := vals[2]
+
+// offset, ok := vm.Pool.Search(val)
+// if !ok {
+// 	fmt.Println("key not found")
+// 	return nil
+// } else {
+// 	row, err := readRow(int64(offset))
+// 	if err != nil {
+// 		fmt.Println("error: ", err)
+// 	}
+//
+// return nil
+// }
 
 func add(ins []byte) {
-	fmt.Println("need to implement add")
-	fmt.Println("instructions: ", ins)
 }
 
 func update(ins []byte) {

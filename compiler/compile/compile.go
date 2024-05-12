@@ -8,6 +8,12 @@ import (
 	"github.com/aidanjjenkins/compiler/code"
 )
 
+// table row layout
+//
+//	total len  index    col lengths table name  columns
+//
+// | 8 bytes |255 bytes| 80 bytes | 255 bytes | unknown size |
+
 const (
 	Lengths         = 4
 	RowMetaDataSize = 295
@@ -41,7 +47,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 	case *ast.CreateTableStatement:
 		ins := code.Make(code.OpCreateTable)
-		m := createTableMetaRow(*node)
+		m := createTableRow(*node)
 
 		rowLen := len(m)
 		n := make([]byte, 8)
@@ -75,7 +81,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 	return nil
 }
 
-func createTableMetaRow(node ast.CreateTableStatement) []byte {
+func createTableRow(node ast.CreateTableStatement) []byte {
 	row := []byte{}
 	metaData := make([]byte, TableMetaDataSize)
 	lengths := make([]byte, TableMetaDataLengths)
