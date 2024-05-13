@@ -15,9 +15,6 @@ import (
 	"github.com/aidanjjenkins/compiler/vm"
 )
 
-// can now loop through table rows can get each table from the file
-// now need to access the value from the table to create the in memory table info
-
 const PROMPT = ">>> "
 
 func onStart() map[string]*vm.Tbls {
@@ -49,7 +46,6 @@ func readTableData() (map[string]*vm.Tbls, error) {
 	defer file.Close()
 
 	fileInfo, err := file.Stat()
-	fmt.Println("fileinfo", fileInfo.Size())
 	if err != nil {
 		fmt.Println("Next offset is not withing file size", err)
 		return nil, err
@@ -58,38 +54,41 @@ func readTableData() (map[string]*vm.Tbls, error) {
 	fileSize := fileInfo.Size()
 	fileBytes := make([]byte, fileSize)
 	file.Read(fileBytes)
-
 	tables := [][]byte{}
 	for len(fileBytes) > 0 {
 		row, newFileBytes := readTableRow(fileBytes)
+
 		tables = append(tables, row)
+
 		fileBytes = newFileBytes
 	}
 
-	m := make(map[string]*vm.Tbls)
 	for _, t := range tables {
-		name := cleanse(t[c.TableMetaDataSize : c.TableMetaDataSize+c.TableNameSize])
-		cols := t[c.TableMetaDataSize+c.TableNameSize:]
-		lens := AccessTableMetaDataLengths(t)
-		colMap := make(map[string]string)
-		for i := 0; i < len(lens); i += 2 {
-			valueLength := lens[i]
-			typeLength := lens[i+1]
-
-			grouplen := valueLength + typeLength
-			group := cols[:grouplen]
-
-			colName := string(group[:valueLength])
-			colType := string(group[valueLength:])
-			colMap[colName] = colType
-
-			m[name] = &vm.Tbls{Cols: colMap, Idx: []string{}}
-			cols = cols[grouplen:]
-		}
-
+		fmt.Println("table: ", t)
 	}
-	// fmt.Println("wishlist: ", m["wishlist"].Cols)
-	// fmt.Println("dogs: ", m["dogs"].Cols)
+
+	m := make(map[string]*vm.Tbls)
+	// for _, t := range tables {
+	// 	name := cleanse(t[c.TableMetaDataSize : c.TableMetaDataSize+c.TableNameSize])
+	// 	cols := t[c.TableMetaDataSize+c.TableNameSize:]
+	// 	lens := AccessTableMetaDataLengths(t)
+	// 	colMap := make(map[string]string)
+	// 	for i := 0; i < len(lens); i += 2 {
+	// 		valueLength := lens[i]
+	// 		typeLength := lens[i+1]
+	//
+	// 		grouplen := valueLength + typeLength
+	// 		group := cols[:grouplen]
+	//
+	// 		colName := string(group[:valueLength])
+	// 		colType := string(group[valueLength:])
+	// 		colMap[colName] = colType
+	//
+	// 		m[name] = &vm.Tbls{Cols: colMap, Idx: []string{}}
+	// 		cols = cols[grouplen:]
+	// 	}
+	//
+	// }
 
 	return m, nil
 }
@@ -97,11 +96,9 @@ func readTableData() (map[string]*vm.Tbls, error) {
 func cleanse(substring []byte) string {
 	endIndex := bytes.IndexAny(substring, "\x00 \t\n\r")
 	if endIndex == -1 {
-		// If no null byte or whitespace character found, endIndex is the end of the substring
 		endIndex = len(substring)
 	}
 
-	// Trim the substring to the first null byte or whitespace character
 	trimmedSubstring := substring[:endIndex]
 
 	return string(trimmedSubstring)

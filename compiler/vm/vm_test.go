@@ -39,8 +39,9 @@ func TestAddTable(t *testing.T) {
 		input string
 		name  string
 	}{
-		// {"CREATE TABLE dogs (name varchar, breed varchar);", "dogs"},
+		{"CREATE TABLE dogs (name varchar, breed varchar);", "dogs"},
 		{"CREATE TABLE wishlist (brand varchar, price varchar, seller varchar);", "wishlist"},
+		{"CREATE TABLE people (brand varchar, price varchar, seller varchar);", "people"},
 	}
 
 	for _, tt := range tests {
@@ -57,6 +58,8 @@ func TestAddTable(t *testing.T) {
 		}
 
 	}
+	os.Remove(TableFile)
+	os.Remove(IdxFile)
 }
 
 func testAddTableStatement(t *testing.T, stmt ast.Statement, comp *c.Compiler, n string) bool {
@@ -80,7 +83,6 @@ func testAddTableStatement(t *testing.T, stmt ast.Statement, comp *c.Compiler, n
 		t.Errorf("Row not found")
 		return false
 	}
-	fmt.Println("row: ", row)
 
 	name := GetTableNameBytes(row)
 	if name != n {
@@ -88,117 +90,105 @@ func testAddTableStatement(t *testing.T, stmt ast.Statement, comp *c.Compiler, n
 		return false
 	}
 
-	os.Remove(TableFile)
-	os.Remove(IdxFile)
-
 	return true
 }
 
-// func dummyTable(t *testing.T) error {
-// 	tests := []struct {
-// 		input string
-// 	}{
-// 		{"CREATE TABLE dogs (name varchar, breed varchar);"},
-// 		{"CREATE TABLE people (name varchar, age varchar);"},
-// 	}
-//
-// 	for _, tt := range tests {
-// 		program := createParseProgram(tt.input, t)
-// 		if len(program.Statements) != 1 {
-// 			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
-// 		}
-//
-// 		stmt := program.Statements[0]
-// 		comp := c.New()
-//
-// 		err := comp.Compile(stmt)
-// 		if err != nil {
-// 			t.Error("Compile error: ", err)
-// 			return err
-// 		}
-//
-// 		tInfo := make(map[string]*Tbls)
-// 		machine := New(comp.Bytecode(), tInfo)
-// 		err = machine.Run()
-// 		if err != nil {
-// 			t.Error("Error running")
-// 			return err
-// 		}
-// 	}
-//
-// 	return nil
-// }
-//
-// func TestAddIndex(t *testing.T) {
-// 	err := dummyTable(t)
-// 	if err != nil {
-// 		return
-// 	}
-//
-// 	tests := []struct {
-// 		input string
-// 		idx   string
-// 	}{
-// 		{"CREATE INDEX ON dogs (name);", "name"},
-// 	}
-//
-// 	for _, tt := range tests {
-// 		program := createParseProgram(tt.input, t)
-// 		if len(program.Statements) != 1 {
-// 			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
-// 		}
-//
-// 		stmt := program.Statements[0]
-// 		comp := c.New()
-//
-// 		err := comp.Compile(stmt)
-// 		if err != nil {
-// 			t.Error("Compile error: ", err)
-// 			return
-// 		}
-//
-// 		tInfo := make(map[string]*Tbls)
-// 		machine := New(comp.Bytecode(), tInfo)
-// 		err = machine.Run()
-// 		if err != nil {
-// 			t.Error("Error running")
-// 			return
-// 		}
-//
-// 		idxAdded, err := printFirstBytes(TableFile)
-// 		if err != nil {
-// 			fmt.Println("Error printing bytes: ", err)
-// 		}
-//
-// 		if idxAdded != tt.idx {
-// 			t.Error("Idx does not match")
-// 			return
-// 		}
-// 	}
-//
-// 	os.Remove(TableFile)
-// 	os.Remove(IdxFile)
-// }
-//
-// func printFirstBytes(filename string) (string, error) {
-// 	// Open the file for reading
-// 	file, err := os.Open(filename)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	defer file.Close()
-//
-// 	// Read the first 500 bytes from the file
-// 	buffer := make([]byte, 4)
-// 	bytesRead, err := file.Read(buffer)
-// 	if err != nil && err != io.EOF {
-// 		return "", err
-// 	}
-//
-// 	// Print the bytes read from the file
-//
-// 	return string(buffer[:bytesRead]), err
-// }
+func dummy(t *testing.T) {
+	tests := []struct {
+		input string
+	}{
+		{"CREATE TABLE wishlist (name varchar);"},
+		{"CREATE TABLE people (age varchar, name varchar);"},
+	}
+
+	for _, tt := range tests {
+		program := createParseProgram(tt.input, t)
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+		}
+
+		stmt := program.Statements[0]
+		comp := c.New()
+
+		err := comp.Compile(stmt)
+		if err != nil {
+			t.Error("Compile error: ", err)
+			return
+		}
+
+		tInfo := make(map[string]*Tbls)
+		machine := New(comp.Bytecode(), tInfo)
+		err = machine.Run()
+		if err != nil {
+			t.Error("Error running")
+			return
+		}
+	}
+}
+
+func TestAddIndex(t *testing.T) {
+	dummy(t)
+	err := printTableFile()
+	if err != nil {
+		fmt.Println("error printing table file: ", err)
+	}
+	tests := []struct {
+		input string
+	}{
+		// {"CREATE INDEX ON wishlist (name);"},
+		{"CREATE INDEX ON people (age);"},
+	}
+
+	for _, tt := range tests {
+		program := createParseProgram(tt.input, t)
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+		}
+
+		stmt := program.Statements[0]
+		comp := c.New()
+
+		err := comp.Compile(stmt)
+		if err != nil {
+			t.Error("Compile error: ", err)
+			return
+		}
+
+		tInfo := make(map[string]*Tbls)
+		machine := New(comp.Bytecode(), tInfo)
+		err = machine.Run()
+		if err != nil {
+			t.Error("Error running")
+			return
+		}
+	}
+	err = printTableFile()
+	if err != nil {
+		fmt.Println("error printing table file: ", err)
+	}
+	os.Remove(TableFile)
+	os.Remove(IdxFile)
+}
+
+func printTableFile() error {
+	file, err := os.Open(TableFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		fmt.Println("Next offset is not withing file size", err)
+		return err
+	}
+
+	fileSize := fileInfo.Size()
+	fileBytes := make([]byte, fileSize)
+	file.Read(fileBytes)
+	// fmt.Println("file: ", fileBytes)
+	return nil
+}
 
 // func TestSelect(t *testing.T) {
 // 	tests := []struct {

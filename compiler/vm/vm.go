@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"os"
 
 	tree "github.com/aidanjjenkins/bplustree"
@@ -105,6 +104,7 @@ func (vm *VM) addTable(ins []byte) {
 	}
 
 	offset, err := writeRow(ins[1:], TableFile)
+
 	if err != nil {
 		fmt.Println("error: ", err)
 	}
@@ -151,13 +151,15 @@ func writeRow(data []byte, filename string) (uint32, error) {
 	}
 	defer file.Close()
 
-	n, err := file.Write(data)
+	fileInfo, err := file.Stat()
+	fileLen := fileInfo.Size()
+
+	_, err = file.Write(data)
 	if err != nil {
 		return 0, err
 	}
 
-	offset := uint32(n) - uint32(len(data))
-	return offset, nil
+	return uint32(fileLen), nil
 }
 
 func updateSameLength(offset uint32, data []byte) error {
@@ -167,12 +169,7 @@ func updateSameLength(offset uint32, data []byte) error {
 	}
 	defer file.Close()
 
-	_, err = file.Seek(int64(offset), io.SeekStart)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(data)
+	_, err = file.WriteAt(data, int64(offset+8))
 	if err != nil {
 		return err
 	}
@@ -229,11 +226,9 @@ func accessTableMetaDataLengths(ins []byte) []int {
 func cleanse(substring []byte) string {
 	endIndex := bytes.IndexAny(substring, "\x00 \t\n\r")
 	if endIndex == -1 {
-		// If no null byte or whitespace character found, endIndex is the end of the substring
 		endIndex = len(substring)
 	}
 
-	// Trim the substring to the first null byte or whitespace character
 	trimmedSubstring := substring[:endIndex]
 
 	return string(trimmedSubstring)
@@ -274,13 +269,19 @@ func AccessIndexName(ins []byte) []byte {
 
 func (vm *VM) addIndex(ins []byte) {
 	vals := c.AccessIndexVals(ins)
-
+	idx := vals[0]
 	t := AccessIndexName(ins)
 	tName := cleanse(t)
-	table := vm.FindTable(tName)
 
-	copy(table[:c.TableMetaDataSize], []byte(vals[0]))
-	updateSameLength(0, table)
+	offset, ok := vm.Pool.Search(tName)
+	if !ok {
+		fmt.Println("key not found")
+		return
+	} else {
+		updateSameLength(offset, []byte(idx))
+
+	}
+
 }
 
 // func (vm *VM) search(ins []byte) []byte {
