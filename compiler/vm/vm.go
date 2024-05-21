@@ -87,7 +87,7 @@ func (vm *VM) Run() error {
 	case code.OpSelect:
 		// vm.search(vm.Instructions)
 	case code.OpInsert:
-		add(vm.Instructions)
+		vm.add(vm.Instructions)
 	case code.OpUpdate:
 		update(vm.Instructions)
 	}
@@ -305,9 +305,58 @@ func (vm *VM) addIndex(ins []byte) {
 // return nil
 // }
 
-func add(ins []byte) {
+func (vm *VM) add(ins []byte) {
+	values := c.AccessSelectValues(ins)
+	name := values[0]
+	info, ok := vm.Info[name]
+	if !ok {
+		fmt.Println("no table with that name")
+	}
+
+	cols := []string{}
+	for k := range info.Cols {
+		cols = append(cols, k)
+	}
+	if len(cols) < len(values[1:]) {
+		fmt.Println("Too many values for table")
+		return
+	}
+	idxOfIdx := 0
+	if len(info.Idx) > 0 {
+		for i := range cols {
+			if cols[i] == info.Idx[0] {
+				idxOfIdx = i
+			}
+		}
+		offset, err := writeRow(ins[1:], RowsFile)
+		if err != nil {
+			fmt.Println("Error writing row: ", err)
+			return
+		}
+		vm.Pool.Add([]byte(values[idxOfIdx]), offset)
+		return
+	}
+	err := writeRowWithoutIndex(ins[1:], RowsFile)
+	if err != nil {
+		fmt.Println("Error writing row: ", err)
+		return
+	}
 }
 
+func writeRowWithoutIndex(data []byte, filename string) error {
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 func update(ins []byte) {
 	fmt.Println("need to implement update")
 	fmt.Println("instructions: ", ins)

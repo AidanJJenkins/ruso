@@ -128,10 +128,10 @@ func dummy(t *testing.T) {
 
 func TestAddIndex(t *testing.T) {
 	dummy(t)
-	err := printTableFile()
-	if err != nil {
-		fmt.Println("error printing table file: ", err)
-	}
+	// err := printTableFile()
+	// if err != nil {
+	// 	fmt.Println("error printing table file: ", err)
+	// }
 	tests := []struct {
 		input string
 	}{
@@ -162,10 +162,10 @@ func TestAddIndex(t *testing.T) {
 			return
 		}
 	}
-	err = printTableFile()
-	if err != nil {
-		fmt.Println("error printing table file: ", err)
-	}
+	// err = printTableFile()
+	// if err != nil {
+	// 	fmt.Println("error printing table file: ", err)
+	// }
 	os.Remove(TableFile)
 	os.Remove(IdxFile)
 }
@@ -186,8 +186,114 @@ func printTableFile() error {
 	fileSize := fileInfo.Size()
 	fileBytes := make([]byte, fileSize)
 	file.Read(fileBytes)
-	// fmt.Println("file: ", fileBytes)
 	return nil
+}
+
+func TestInsert(t *testing.T) {
+	tests := []struct {
+		input string
+		name  string
+	}{
+		{"INSERT INTO dogs (\"stella\", \"labradoodle\");", "dogs"},
+	}
+
+	for _, tt := range tests {
+		program := createParseProgram(tt.input, t)
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+		}
+
+		stmt := program.Statements[0]
+		comp := c.New()
+
+		if !testInsert(t, stmt, comp, tt.name) {
+			return
+		}
+
+	}
+	os.Remove(RowsFile)
+	os.Remove(IdxFile)
+}
+
+func testInsert(t *testing.T, stmt ast.Statement, comp *c.Compiler, n string) bool {
+	err := comp.Compile(stmt)
+	if err != nil {
+		t.Error("Compile error: ", err)
+		return false
+	}
+
+	tInfo := make(map[string]*Tbls)
+	dogCols := make(map[string]string)
+	dogCols["name"] = "varchar"
+	dogCols["breed"] = "varchar"
+	dogstabls := &Tbls{Cols: dogCols, Idx: []string{"name"}}
+	tInfo["dogs"] = dogstabls
+
+	machine := New(comp.Bytecode(), tInfo)
+	err = machine.Run()
+	if err != nil {
+		t.Error("Error running")
+		return false
+	}
+
+	err = printRowsFile()
+	if err != nil {
+		fmt.Println("error: ", err)
+		return false
+	}
+
+	return true
+}
+
+func printRowsFile() error {
+	file, err := os.Open(RowsFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		fmt.Println("Next offset is not withing file size", err)
+		return err
+	}
+
+	fileSize := fileInfo.Size()
+	fileBytes := make([]byte, fileSize)
+	file.Read(fileBytes)
+	return nil
+}
+func dummy4Insert(t *testing.T) {
+	tests := []struct {
+		input string
+	}{
+		{"CREATE TABLE dogs (name varchar, breed varchar);"},
+		{"CREATE INDEX ON dogs (name);"},
+	}
+
+	for _, tt := range tests {
+		program := createParseProgram(tt.input, t)
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+		}
+
+		stmt := program.Statements[0]
+		comp := c.New()
+
+		err := comp.Compile(stmt)
+		if err != nil {
+			t.Error("Compile error: ", err)
+			return
+		}
+
+		tInfo := make(map[string]*Tbls)
+		machine := New(comp.Bytecode(), tInfo)
+		err = machine.Run()
+		if err != nil {
+			t.Error("Error running")
+			return
+		}
+	}
 }
 
 // func TestSelect(t *testing.T) {

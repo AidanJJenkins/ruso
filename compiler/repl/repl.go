@@ -57,38 +57,34 @@ func readTableData() (map[string]*vm.Tbls, error) {
 	tables := [][]byte{}
 	for len(fileBytes) > 0 {
 		row, newFileBytes := readTableRow(fileBytes)
-
 		tables = append(tables, row)
-
 		fileBytes = newFileBytes
 	}
 
-	for _, t := range tables {
-		fmt.Println("table: ", t)
-	}
-
 	m := make(map[string]*vm.Tbls)
-	// for _, t := range tables {
-	// 	name := cleanse(t[c.TableMetaDataSize : c.TableMetaDataSize+c.TableNameSize])
-	// 	cols := t[c.TableMetaDataSize+c.TableNameSize:]
-	// 	lens := AccessTableMetaDataLengths(t)
-	// 	colMap := make(map[string]string)
-	// 	for i := 0; i < len(lens); i += 2 {
-	// 		valueLength := lens[i]
-	// 		typeLength := lens[i+1]
-	//
-	// 		grouplen := valueLength + typeLength
-	// 		group := cols[:grouplen]
-	//
-	// 		colName := string(group[:valueLength])
-	// 		colType := string(group[valueLength:])
-	// 		colMap[colName] = colType
-	//
-	// 		m[name] = &vm.Tbls{Cols: colMap, Idx: []string{}}
-	// 		cols = cols[grouplen:]
-	// 	}
-	//
-	// }
+	for _, t := range tables {
+		name := cleanse(t[c.TableMetaDataSize : c.TableMetaDataSize+c.TableNameSize])
+		idx := cleanse(t[:c.TableIndexSize])
+		cols := t[c.TableMetaDataSize+c.TableNameSize:]
+		lens := AccessTableMetaDataLengths(t)
+		colMap := make(map[string]string)
+		for i := 0; i < len(lens); i += 2 {
+			valueLength := lens[i]
+			typeLength := lens[i+1]
+
+			grouplen := valueLength + typeLength
+			group := cols[:grouplen]
+
+			colName := string(group[:valueLength])
+			colType := string(group[valueLength:])
+			colMap[colName] = colType
+
+			m[name] = &vm.Tbls{Cols: colMap, Idx: []string{}}
+			cols = cols[grouplen:]
+		}
+
+		m[name].Idx = append(m[name].Idx, idx)
+	}
 
 	return m, nil
 }
@@ -140,13 +136,7 @@ func Start(in io.Reader, out io.Writer) {
 		command := scanner.Text()
 
 		if strings.HasPrefix(command, "\\") {
-			switch command {
-			case "\\q":
-				fmt.Println(">>> Shutting down...")
-				return
-			default:
-				fmt.Println(">>> Unknown meta command:", command)
-			}
+			metaCommand(command, dbInfo)
 		} else {
 			if string(command[len(command)-1]) != ";" {
 				fmt.Println("Missing ';'")
@@ -178,5 +168,75 @@ func Start(in io.Reader, out io.Writer) {
 			}
 		}
 
+	}
+}
+
+func dTable(info map[string]*vm.Tbls, tName string) {
+	data, ok := info[tName]
+	if !ok {
+		fmt.Println("Table name not found")
+		return
+	}
+
+	var cols [][]string
+	for k, v := range data.Cols {
+		var kv []string
+		kv = append(kv, k)
+		kv = append(kv, v)
+
+		cols = append(cols, kv)
+	}
+
+	mWidths := calculateMaxWidths(cols)
+	printTable(cols, mWidths)
+	fmt.Println("indexes: ", data.Idx)
+}
+
+func calculateMaxWidths(data [][]string) []int {
+	if len(data) == 0 {
+		return nil
+	}
+
+	numColumns := len(data[0])
+	maxWidths := make([]int, numColumns)
+
+	for _, row := range data {
+		for i, item := range row {
+			if len(item) > maxWidths[i] {
+				maxWidths[i] = len(item)
+			}
+		}
+	}
+
+	return maxWidths
+}
+
+func printTable(data [][]string, maxWidths []int) {
+	for _, row := range data {
+		var builder strings.Builder
+		builder.WriteString("| ")
+
+		for i, item := range row {
+			builder.WriteString(fmt.Sprintf("%-*s", maxWidths[i], item))
+			builder.WriteString(" | ")
+		}
+
+		fmt.Println(builder.String())
+	}
+}
+
+func metaCommand(c string, tableInfo map[string]*vm.Tbls) {
+	cmd := strings.Split(c, " ")
+	switch cmd[0] {
+	case "\\q":
+		fmt.Println(">>> Shutting down...")
+		os.Exit(0)
+	case "\\d":
+		fmt.Println("table: ", cmd[1])
+		dTable(tableInfo, cmd[1])
+		return
+	default:
+		fmt.Println(">>> Unknown meta command:", cmd)
+		return
 	}
 }
