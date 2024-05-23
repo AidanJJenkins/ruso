@@ -9,13 +9,15 @@ import (
 )
 
 // table row layout
-//
-//	total len  index    col lengths table name  columns
-//
-// | 8 bytes |255 bytes| 80 bytes | 255 bytes | unknown size |
+//  len       cell cols...
+// | 8 bytes | ???
+
+// table cell layout
+// name | type | index | unique | primary key |
 
 const (
 	Lengths         = 4
+	TotalLengths    = 8
 	RowMetaDataSize = 295
 
 	TableMetaDataSize    = 335
@@ -26,11 +28,13 @@ const (
 
 type Compiler struct {
 	Instructions code.Instructions
+	Writes       [][]byte
 }
 
 func New() *Compiler {
 	c := &Compiler{
 		Instructions: code.Instructions{},
+		Writes:       [][]byte{},
 	}
 
 	return c
@@ -46,17 +50,14 @@ func (c *Compiler) Compile(node ast.Node) error {
 			}
 		}
 	case *ast.CreateTableStatement:
-		ins := code.Make(code.OpCreateTable)
+		makeTableInstruction := code.Make(code.OpCreateTable)
+		addTableToTree := code.Make(code.OpAddTableToTree)
+
 		m := createTableRow(*node)
+		c.Writes = append(c.Writes, m)
 
-		rowLen := len(m)
-		n := make([]byte, 8)
-		binary.LittleEndian.PutUint32(n, uint32(rowLen))
-
-		ins = append(ins, n...)
-		ins = append(ins, m...)
-
-		c.Instructions = append(c.Instructions, ins...)
+		c.Instructions = append(c.Instructions, makeTableInstruction...)
+		c.Instructions = append(c.Instructions, addTableToTree...)
 	case *ast.CreateIndexStatement:
 		ins := code.Make(code.OpCreateIndex)
 		ins = append(ins, createIndexInstructions(*node)...)
@@ -81,43 +82,73 @@ func (c *Compiler) Compile(node ast.Node) error {
 	return nil
 }
 
-func createTableRow(node ast.CreateTableStatement) []byte {
-	row := []byte{}
-	metaData := make([]byte, TableMetaDataSize)
-	lengths := make([]byte, TableMetaDataLengths)
+func encodeString(s string) []byte {
+	encodedBytes := []byte(s)
+	encodedBytes = append(encodedBytes, 0x00)
+	return encodedBytes
+}
 
-	n := make([]byte, TableNameSize)
-	copy(n, []byte(node.TName.Val))
-	row = append(row, n...)
+func encodeBool(b bool) byte {
+	if b {
+		return 0xFF
+	}
+	return 0xFD
+}
 
-	offset := 0
-	for i := range node.Cols {
-		col := []byte(node.Cols[i])
-		typ := []byte(node.ColTypes[i])
+func DecodeBytes(data []byte) []string {
+	var result []string
 
-		row = append(row, col...)
-		row = append(row, typ...)
-
-		cLLen := make([]byte, Lengths)
-		tLLen := make([]byte, Lengths)
-		binary.LittleEndian.PutUint32(cLLen, uint32(len(col)))
-		binary.LittleEndian.PutUint32(tLLen, uint32(len(typ)))
-
-		lengths = append(lengths, cLLen...)
-		lengths = append(lengths, tLLen...)
-
-		copy(lengths[offset:offset+4], cLLen)
-		copy(lengths[offset+4:offset+8], tLLen)
-
-		offset += 8
+	for i := 0; i < len(data); i++ {
+		if data[i] == 0x00 { // Null terminating byte
+			break
+		} else if data[i] == 0xFF { // True byte
+			result = append(result, "true")
+		} else if data[i] == 0xFD { // False byte
+			result = append(result, "false")
+		} else { // String byte
+			str := ""
+			for j := i; j < len(data) && data[j] != 0x00; j++ {
+				str += string(data[j])
+				i++
+			}
+			result = append(result, str)
+		}
 	}
 
-	copy(metaData[:255], make([]byte, 255))
-	copy(metaData[255:], lengths)
+	return result
+}
 
-	metaData = append(metaData, row...)
+func createTableRow(node ast.CreateTableStatement) []byte {
+	row := []byte{}
 
-	return metaData
+	encodedName := encodeString(node.TName.Val)
+	row = append(row, encodedName...)
+
+	for i := range node.Cols {
+		col := node.Cols[i]
+		colType := node.ColTypes[i]
+
+		encodedVal := encodeString(col)
+		row = append(row, encodedVal...)
+
+		encodedType := encodeString(colType)
+		row = append(row, encodedType...)
+
+		index := encodeBool(false)
+		row = append(row, index)
+
+		unique := encodeBool(false)
+		row = append(row, unique)
+
+		pk := encodeBool(false)
+		row = append(row, pk)
+	}
+
+	totalLength := make([]byte, TotalLengths)
+	binary.LittleEndian.PutUint32(totalLength, uint32(len(row)))
+	row = append(totalLength, row...)
+
+	return row
 }
 
 func AccessFirstByte(ins []byte) int {
@@ -250,6 +281,8 @@ func AccessSelectValues(ins []byte) []string {
 
 func createInsertInstructions(node ast.InsertStatement) []byte {
 	ins := []byte{}
+	totalRowlen := make([]byte, TotalLengths)
+	ins = append(ins, totalRowlen...)
 	tName := []byte(node.TName.Val)
 
 	tLen := make([]byte, Lengths)
@@ -266,6 +299,7 @@ func createInsertInstructions(node ast.InsertStatement) []byte {
 		ins = append(ins, cLen...)
 		ins = append(ins, col...)
 	}
+	binary.LittleEndian.PutUint32(ins[:TotalLengths], uint32(len(ins)))
 
 	return ins
 }
@@ -362,8 +396,9 @@ func AccessUpdateValues(data []byte) []string {
 
 type Bytecode struct {
 	Instructions code.Instructions
+	Writes       [][]byte
 }
 
 func (c *Compiler) Bytecode() *Bytecode {
-	return &Bytecode{Instructions: c.Instructions}
+	return &Bytecode{Instructions: c.Instructions, Writes: c.Writes}
 }

@@ -14,11 +14,7 @@ import (
 const TableFile string = "tables.db"
 const IdxFile string = "index.db"
 const RowsFile string = "rows.db"
-
-type Tbls struct {
-	Cols map[string]string // name -> type
-	Idx  []string
-}
+const StackSize = 2040
 
 type Pool struct {
 	db tree.Pager
@@ -37,19 +33,28 @@ func newPool() *Pool {
 type VM struct {
 	Pool         *Pool
 	Instructions code.Instructions
-	Info         map[string]*Tbls
+	Writes       [][]byte
+	Stack        []code.Obj
+	sp           int
 }
 
-func New(bytecode *c.Bytecode, info map[string]*Tbls) *VM {
-	vm := VM{Pool: newPool(), Instructions: bytecode.Instructions, Info: info}
+func New(bytecode *c.Bytecode) *VM {
+	vm := VM{
+		Pool:         newPool(),
+		Instructions: bytecode.Instructions,
+		Writes:       bytecode.Writes,
+		Stack:        make([]code.Obj, StackSize),
+		sp:           0,
+	}
 
 	return &vm
 }
 
-func (p *Pool) Add(key []byte, val uint32) {
+func (p *Pool) Add(key string, val uint32) {
+	k := []byte(key)
 	offsetBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(offsetBytes, val)
-	p.db.Set(key, offsetBytes)
+	p.db.Set(k, offsetBytes)
 }
 
 func (p *Pool) Search(key string) (uint32, bool) {
@@ -75,58 +80,78 @@ func NewError(message string) error {
 	return &VMError{Message: message}
 }
 
-func (vm *VM) Run() error {
-	ins := vm.Instructions
-
-	op := code.Opcode(c.AccessFirstByte(ins))
-	switch op {
-	case code.OpCreateTable:
-		vm.addTable(vm.Instructions)
-	case code.OpCreateIndex:
-		vm.addIndex(vm.Instructions)
-	case code.OpSelect:
-		// vm.search(vm.Instructions)
-	case code.OpInsert:
-		vm.add(vm.Instructions)
-	case code.OpUpdate:
-		update(vm.Instructions)
+func (vm *VM) push(obj code.Obj) error {
+	if vm.sp >= StackSize {
+		return fmt.Errorf("Stack overflow")
 	}
+
+	vm.Stack[vm.sp] = obj
+	vm.sp++
 	return nil
 }
 
-func (vm *VM) addTable(ins []byte) {
-	if vm.Info != nil {
-		name := AccessTableNameBytes(ins[1:])
-		if vm.Info[name] != nil {
-			fmt.Println("Table name already exists.")
-			return
+func (vm *VM) pop() code.Obj {
+	o := vm.Stack[vm.sp-1]
+	vm.sp--
+
+	return o
+}
+
+func (vm *VM) Run() error {
+	for ip := 0; ip < len(vm.Instructions); ip++ {
+		op := code.Opcode(vm.Instructions[ip])
+		switch op {
+		case code.OpCreateTable:
+			row := vm.Writes[0]
+			vm.Writes = vm.Writes[1:]
+			decoded := c.DecodeBytes(row[8:])
+			tableName := decoded[0]
+
+			offset, err := writeRow(row, TableFile)
+			if err != nil {
+				return fmt.Errorf("Error writing to table file")
+			}
+
+			tNameObj := &code.TableName{Value: tableName}
+			err = vm.push(tNameObj)
+			if err != nil {
+				return fmt.Errorf("Error pushing to stack")
+			}
+			offObj := &code.RowOffset{Value: offset}
+			err = vm.push(offObj)
+			if err != nil {
+				return fmt.Errorf("Error pushing to stack")
+			}
+		case code.OpAddTableToTree:
+			off := vm.pop()
+			col := vm.pop()
+
+			value := off.(*code.RowOffset).Value
+			key := col.(*code.TableName).Value
+
+			fmt.Println("value: ", value)
+			fmt.Println("key: ", key)
+			vm.Pool.Add(key, value)
+		case code.OpCreateIndex:
+			vm.addIndex(vm.Instructions)
+		case code.OpSelect:
+			vm.search(vm.Instructions)
+		case code.OpInsert:
+			vm.add(vm.Instructions)
+		case code.OpUpdate:
+			update(vm.Instructions)
 		}
 	}
 
-	offset, err := writeRow(ins[1:], TableFile)
+	return nil
+}
 
-	if err != nil {
-		fmt.Println("error: ", err)
-	}
+// DQ row, push index to stack
+// append ltable row to tables file
+// push table offset to stack
 
-	name := AccessTableNameBytes(ins[1:])
-	lens := c.AccessTableMetaDataLengths(ins[1:])
-	vals := c.AccessTableRowInfoBytes(ins[9+c.TableMetaDataSize+255:], lens)
-
-	infoCols := make(map[string]string)
-	i := 0
-	for i < len(vals) {
-		n := vals[i]
-		t := vals[i+1]
-
-		infoCols[n] = t
-		i += 2
-	}
-
-	tbls := &Tbls{Cols: infoCols, Idx: nil}
-	vm.Info[name] = tbls
-
-	vm.Pool.Add([]byte(name), offset)
+// look at next instructions and dq both things in the stack to add to btree
+func (vm *VM) addTable(ins []byte) {
 }
 
 func (vm *VM) FindTable(name string) []byte {
@@ -284,63 +309,33 @@ func (vm *VM) addIndex(ins []byte) {
 
 }
 
-// func (vm *VM) search(ins []byte) []byte {
-// vals := c.AccessSelectValues(ins)
-// fmt.Println("vals", vals)
-//
-// tableName := vals[0]
-// col := vals[1]
-// val := vals[2]
+// use where clause to identify index
+// search using index
+func (vm *VM) search(ins []byte) []byte {
+	vals := c.AccessSelectValues(ins)
 
-// offset, ok := vm.Pool.Search(val)
-// if !ok {
-// 	fmt.Println("key not found")
-// 	return nil
-// } else {
-// 	row, err := readRow(int64(offset))
-// 	if err != nil {
-// 		fmt.Println("error: ", err)
-// 	}
-//
-// return nil
-// }
+	// tableName := vals[0]
+	// col := vals[1]
+	val := vals[2]
+	fmt.Println("len: ", len(val))
+
+	offset, ok := vm.Pool.Search(val)
+	if !ok {
+		fmt.Println("key not found")
+		return nil
+	} else {
+		row, err := readRow(int64(offset), RowsFile)
+		fmt.Println("row found: ", row)
+		if err != nil {
+			fmt.Println("error: ", err)
+		}
+
+		return nil
+	}
+}
 
 func (vm *VM) add(ins []byte) {
-	values := c.AccessSelectValues(ins)
-	name := values[0]
-	info, ok := vm.Info[name]
-	if !ok {
-		fmt.Println("no table with that name")
-	}
 
-	cols := []string{}
-	for k := range info.Cols {
-		cols = append(cols, k)
-	}
-	if len(cols) < len(values[1:]) {
-		fmt.Println("Too many values for table")
-		return
-	}
-	idxOfIdx := 0
-	if len(info.Idx) > 0 {
-		for i := range cols {
-			if cols[i] == info.Idx[0] {
-				idxOfIdx = i
-			}
-		}
-		offset, err := writeRow(ins[1:], RowsFile)
-		if err != nil {
-			fmt.Println("Error writing row: ", err)
-			return
-		}
-		vm.Pool.Add([]byte(values[idxOfIdx]), offset)
-		return
-	}
-	err := writeRowWithoutIndex(ins[1:], RowsFile)
-	if err != nil {
-		fmt.Println("Error writing row: ", err)
-		return
-	}
 }
 
 func writeRowWithoutIndex(data []byte, filename string) error {
