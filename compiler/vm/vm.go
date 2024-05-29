@@ -33,6 +33,7 @@ func newPool() *Pool {
 type VM struct {
 	Pool         *Pool
 	Instructions code.Instructions
+	constants    []code.Obj
 	Writes       [][]byte
 	Stack        []code.Obj
 	sp           int
@@ -129,13 +130,26 @@ func (vm *VM) Run() error {
 			value := off.(*code.RowOffset).Value
 			key := col.(*code.TableName).Value
 
-			fmt.Println("value: ", value)
-			fmt.Println("key: ", key)
 			vm.Pool.Add(key, value)
+		case code.OpConstant:
+			constIndex := code.ReadUint16(vm.Instructions[ip+1:])
+			ip += 2
+
+			err := vm.push(vm.constants[constIndex])
+			if err != nil {
+				return err
+			}
 		case code.OpCreateIndex:
+			// just pop off the two constants on the stack
+			// and update table row
 			vm.addIndex(vm.Instructions)
 		case code.OpSelect:
-			vm.search(vm.Instructions)
+		// also need to put a check to see if the where values are an indexed columns
+		// get values from stack,
+		// need to first find find table row, figure out what index the columns are in table
+		// table row: [name, col1, col2, col3, col4]
+		// if where clause values are col1 and col3, thos are idxs 1 and 3, loop through all rows
+		// skipping all rows not in the correct table, and check those indexes to see if they match
 		case code.OpInsert:
 			vm.add(vm.Instructions)
 		case code.OpUpdate:
