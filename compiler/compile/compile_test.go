@@ -73,7 +73,7 @@ func TestSelect(t *testing.T) {
 			input:             "SELECT * FROM wishlist WHERE name = \"rtx 4090\";",
 			expectedConstants: []interface{}{name, where},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpConstant, 0),
+				code.Make(code.OpTableNameSearch, 0),
 				code.Make(code.OpWhereCondition, 1),
 				code.Make(code.OpSelect, 2),
 			},
@@ -114,7 +114,7 @@ func runCompilerTests(t *testing.T, tests []compilerTestCase) {
 			t.Fatalf("testInstructions failed: %s", err)
 		}
 
-		err = testConstants(t, tt.expectedConstants, bytecode.constants)
+		err = testConstants(t, tt.expectedConstants, bytecode.Constants)
 		if err != nil {
 			t.Fatalf("testConstants failed: %s", err)
 		}

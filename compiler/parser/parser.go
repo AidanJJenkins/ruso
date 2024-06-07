@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+
 	"github.com/aidanjjenkins/compiler/ast"
 	"github.com/aidanjjenkins/compiler/lexer"
 	"github.com/aidanjjenkins/compiler/token"
@@ -266,6 +267,11 @@ func (p *Parser) parseCreateTableStatement() *ast.CreateTableStatement {
 	}
 	stmt.TName = &ast.Identifier{Token: p.curToken, Val: p.curToken.Literal}
 
+	ok := p.isValidName(stmt.TName.Val)
+	if !ok {
+		return nil
+	}
+
 	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
@@ -415,4 +421,30 @@ func (p *Parser) ParseProgram() *ast.Program {
 	}
 
 	return program
+}
+
+func (p *Parser) isValidName(name string) bool {
+	if len(name) > 255 {
+		msg := "name is too long; must be 255 characters or fewer"
+		p.errors = append(p.errors, msg)
+		return false
+	}
+
+	for i := 0; i < len(name); i++ {
+		if name[i] == ' ' {
+			msg := "name contains spaces"
+			p.errors = append(p.errors, msg)
+			return false
+		}
+
+		// Check for other problematic characters
+		switch name[i] {
+		case '\'', '"', ';', '\\', '/', '.', ',', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=', '{', '}', '[', ']', ':', '<', '>', '?', '|', '`', '~':
+			msg := "name contains invalid characters"
+			p.errors = append(p.errors, msg)
+			return false
+		}
+	}
+
+	return true
 }

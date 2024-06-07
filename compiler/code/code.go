@@ -28,6 +28,9 @@ const (
 	ADD_INDEX_OBJ                 = "ADD INDEX"
 	COL_OBJ                       = "COLUMN"
 	WHERE_OBJ                     = "WHERE"
+	ENCODED_VAL                   = "ENCODED_VAL"
+	FOUND_ROW                     = "FOUND_ROW"
+	CONSTANT_VAL                  = "CONSTANT_VAL"
 	OpCreateTable          Opcode = iota
 	OpCreateIndex
 	OpSelect
@@ -63,6 +66,7 @@ var definitions = map[Opcode]*Definition{
 	OpInsertRow:        {"OpInsertRow", []int{1}},
 	OpSelect:           {"OpSelect", []int{1}},
 	OpWhereCondition:   {"OpWhereCondition", []int{2}},
+	OpTableNameSearch:  {"OpTableNameSearch", []int{2}},
 }
 
 func Make(op Opcode, operands ...int) []byte {
@@ -292,4 +296,31 @@ type Where struct {
 func (w *Where) Type() Object { return WHERE_OBJ }
 func (w *Where) Inspect() string {
 	return fmt.Sprintf("Column: %s, Value: %s ", w.Column, w.Value)
+}
+
+type EncodedVal struct {
+	Val []byte
+}
+
+func (ev *EncodedVal) Type() Object { return ENCODED_VAL }
+func (ev *EncodedVal) Inspect() string {
+	return fmt.Sprintf("Encoded bytes: %s,:", ev.Val)
+}
+
+type Constant struct {
+	Val string
+}
+
+func (c *Constant) Type() Object { return ENCODED_VAL }
+func (c *Constant) Inspect() string {
+	return fmt.Sprintf("Encoded bytes: %s,:", c.Val)
+}
+
+type FoundRow struct {
+	Val []string
+}
+
+func (fr *FoundRow) Type() Object { return FOUND_ROW }
+func (fr *FoundRow) Inspect() string {
+	return fmt.Sprintf("Found row: %s,:", fr.Val)
 }
