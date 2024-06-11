@@ -151,9 +151,13 @@ func extendFile(db *Pager, npages int) error {
 	}
 
 	fileSize := filePages * BTREE_PAGE_SIZE
-	err := syscall.Fallocate(int(db.fp.Fd()), 0, 0, int64(fileSize))
+	// err := syscall.Fallocate(int(db.fp.Fd()), 0, 0, int64(fileSize))
+	// if err != nil {
+	// 	return fmt.Errorf("fallocate: %w", err)
+	// }
+	err := db.fp.Truncate(int64(fileSize))
 	if err != nil {
-		return fmt.Errorf("fallocate: %w", err)
+		return fmt.Errorf("truncate: %w", err)
 	}
 
 	db.mmap.file = fileSize
@@ -161,7 +165,7 @@ func extendFile(db *Pager, npages int) error {
 }
 
 func (db *Pager) pageDel(uint64) {
-	// TODO: implement this
+	// TODO
 }
 
 func (db *Pager) Open() error {
