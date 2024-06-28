@@ -15,6 +15,9 @@ const (
 
 	INTEGER = "INTEGER"
 	STRING  = "STRING"
+	BOOLEAN = "BOOLEAN"
+	FALSE   = "FALSE"
+	TRUE    = "TRUE"
 
 	ASSIGN = "="
 	ALL    = "*"

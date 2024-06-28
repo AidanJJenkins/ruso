@@ -221,18 +221,33 @@ func (p *Parser) parseInsertStatement() *ast.InsertStatement {
 	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
-	val, err := p.parseInsertValues()
-	if err == false {
-		return nil
+	colNodes := []*ast.InsertVals{}
+	if p.curTokenIs(token.LPAREN) {
+		iV := *&ast.InsertVals{}
+		iV.Token = p.curToken
+		list := p.parseValsList()
+		iV.Values = list
+		colNodes = append(colNodes, &iV)
+	}
+	p.nextToken()
+	if p.curTokenIs(token.VALUES) {
+		p.nextToken()
+		if p.curTokenIs(token.LPAREN) {
+			iV := *&ast.InsertVals{}
+			iV.Token = p.curToken
+			list := p.parseValsList()
+			iV.Values = list
+			colNodes = append(colNodes, &iV)
+		}
 	}
 
-	stmt.Values = append(stmt.Values, val)
-	for p.curTokenIs(token.COMMA) {
-		val, err := p.parseInsertValues()
-		if err == false {
-			return nil
-		}
-		stmt.Values = append(stmt.Values, val)
+	if len(colNodes) == 1 {
+		stmt.Right = colNodes[0]
+	} else if len(colNodes) == 2 {
+		stmt.Left = colNodes[0]
+		stmt.Right = colNodes[1]
+	} else if len(colNodes) < 1 || len(colNodes) > 2 {
+		return nil
 	}
 
 	for !p.curTokenIs(token.SEMICOLON) {
@@ -240,6 +255,68 @@ func (p *Parser) parseInsertStatement() *ast.InsertStatement {
 	}
 
 	return stmt
+}
+
+// need to figure out how to identify if its a bool, a string, or an int?
+func (p *Parser) parseValue() (ast.Statement, bool) {
+	switch p.curToken.Type {
+	case token.IDENT:
+		return p.parseIdentifier()
+	case token.STRING:
+		return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}, true
+	case token.INT:
+		return &ast.IntegerLiteral{Token: p.curToken, Value: p.curToken.Literal}, true
+	case token.TRUE, token.FALSE:
+		return &ast.BooleanLiteral{Token: p.curToken, Value: p.curToken.Type == token.TRUE}, true
+	default:
+		return nil, false
+	}
+}
+func (p *Parser) parseIdentifier() (*ast.Ident, bool) {
+	startToken := p.curToken
+	combinedLiteral := p.curToken.Literal
+
+	for !p.peekTokenIs(token.COMMA) && !p.peekTokenIs(token.RPAREN) && !p.peekTokenIs(token.EOF) {
+		p.nextToken()
+		combinedLiteral += p.curToken.Literal
+	}
+
+	return &ast.Ident{Token: startToken, Val: combinedLiteral}, true
+}
+
+func (p *Parser) parseValsList() []ast.Statement {
+
+	values := []ast.Statement{}
+
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return nil
+	}
+
+	p.nextToken()
+	value, ok := p.parseValue()
+	if !ok {
+		return nil
+	}
+	values = append(values, value)
+
+	// Parse subsequent values
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // Consume the comma
+		p.nextToken() // Move to the next value
+
+		value, ok := p.parseValue()
+		if !ok {
+			return nil
+		}
+		values = append(values, value)
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return values
 }
 
 func (p *Parser) parseInsertValues() (string, bool) {
@@ -251,6 +328,7 @@ func (p *Parser) parseInsertValues() (string, bool) {
 	if p.curTokenIs(token.RPAREN) {
 		return res, true
 	}
+	fmt.Println("res:", res)
 	p.nextToken()
 	return res, true
 }

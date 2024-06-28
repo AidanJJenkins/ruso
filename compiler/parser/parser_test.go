@@ -129,12 +129,82 @@ func testInsertStatement(t *testing.T, s ast.Statement, name string, val []strin
 	}
 
 	for i := range val {
-		if stmt.Values[i] != val[i] {
-			t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Values[i])
-			return false
+		nodeVal := stmt.Right.Values[i]
+		switch n := nodeVal.(type) {
+		case *ast.StringLiteral:
+			if n.Value != val[i] {
+				t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Right.Values[i].TokenLiteral())
+				return false
+			}
 		}
 	}
 
+	return true
+}
+
+func TestInsertStatementDouble(t *testing.T) {
+	tests := []struct {
+		input              string
+		expectedIdentifier string
+		expectedCols       []string
+		expectedVals       []string
+	}{
+		{"INSERT INTO dogs (col1, col2) VALUES (\"val1\", \"val2\");", "dogs", []string{"col1", "col2"}, []string{"val1", "val2"}},
+		{"INSERT INTO dogs (col1, col2, col3) VALUES (\"val1\", \"val2\", \"val3\");", "dogs", []string{"col1", "col2"}, []string{"val1", "val2", "val3"}},
+	}
+
+	for _, tt := range tests {
+		program := createParseProgram(tt.input, t)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+		}
+
+		stmt := program.Statements[0]
+		if !testInsertStatementDouble(t, stmt, tt.expectedIdentifier, tt.expectedCols, tt.expectedVals) {
+			return
+		}
+	}
+}
+
+func testInsertStatementDouble(t *testing.T, s ast.Statement, name string, cols, vals []string) bool {
+	if s.TokenLiteral() != "INSERT" {
+		t.Errorf("s.TokenLiteral not 'let'. got=%q", s.TokenLiteral())
+		return false
+	}
+
+	stmt, ok := s.(*ast.InsertStatement)
+	if !ok {
+		t.Errorf("s not *ast.Delete. got=%T", s)
+		return false
+	}
+
+	if stmt.TName.Val != name {
+		t.Errorf("expected table name: %s got=%s", name, stmt.TName.Val)
+		return false
+	}
+
+	for i := range cols {
+		nodeCols := stmt.Left.Values[i]
+		switch n := nodeCols.(type) {
+		case *ast.StringLiteral:
+			if n.Value != cols[i] {
+				t.Errorf("expected column name: '%s'. got=%s", cols[i], stmt.Right.Values[i].TokenLiteral())
+				return false
+			}
+		}
+	}
+
+	for i := range vals {
+		nodeVal := stmt.Right.Values[i]
+		switch n := nodeVal.(type) {
+		case *ast.StringLiteral:
+			if n.Value != vals[i] {
+				t.Errorf("expected value name: '%s'. got=%s", vals[i], stmt.Right.Values[i].TokenLiteral())
+				return false
+			}
+		}
+	}
 	return true
 }
 
