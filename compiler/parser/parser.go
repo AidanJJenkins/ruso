@@ -218,36 +218,44 @@ func (p *Parser) parseInsertStatement() *ast.InsertStatement {
 	}
 	stmt.TName = &ast.Identifier{Token: p.curToken, Val: p.curToken.Literal}
 
-	if !p.expectPeek(token.LPAREN) {
-		return nil
-	}
-	colNodes := []*ast.InsertVals{}
-	if p.curTokenIs(token.LPAREN) {
-		iV := *&ast.InsertVals{}
-		iV.Token = p.curToken
-		list := p.parseValsList()
-		iV.Values = list
-		colNodes = append(colNodes, &iV)
-	}
 	p.nextToken()
 	if p.curTokenIs(token.VALUES) {
-		p.nextToken()
-		if p.curTokenIs(token.LPAREN) {
-			iV := *&ast.InsertVals{}
-			iV.Token = p.curToken
-			list := p.parseValsList()
-			iV.Values = list
-			colNodes = append(colNodes, &iV)
+		if !p.expectPeek(token.LPAREN) {
+			return nil
 		}
-	}
+		toInsert := &ast.InsertVals{}
+		if p.curTokenIs(token.LPAREN) {
+			toInsert.Token = p.curToken
+			list := p.parseValsList()
+			toInsert.Values = list
+			stmt.Vals = toInsert
+		}
+	} else if p.curTokenIs(token.LPAREN) {
+		cols := &ast.InsertCols{}
+		if p.curTokenIs(token.LPAREN) {
+			cols.Token = p.curToken
+			list := p.parseColsList()
+			cols.Values = list
+			stmt.Cols = cols
+		}
 
-	if len(colNodes) == 1 {
-		stmt.Right = colNodes[0]
-	} else if len(colNodes) == 2 {
-		stmt.Left = colNodes[0]
-		stmt.Right = colNodes[1]
-	} else if len(colNodes) < 1 || len(colNodes) > 2 {
-		return nil
+		if !p.expectPeek(token.VALUES) {
+			return nil
+		}
+		if !p.expectPeek(token.LPAREN) {
+			return nil
+		}
+		toInsert := &ast.InsertVals{}
+		toInsert.Token = p.curToken
+		list := p.parseValsList()
+		toInsert.Values = list
+		stmt.Vals = toInsert
+
+		if len(stmt.Cols.Values) != len(stmt.Vals.Values) {
+			msg := fmt.Sprintf("Mismatching number of columns and values given. Columns: %d, values: %d", len(stmt.Cols.Values), len(stmt.Vals.Values))
+			p.errors = append(p.errors, msg)
+			return nil
+		}
 	}
 
 	for !p.curTokenIs(token.SEMICOLON) {
@@ -260,8 +268,6 @@ func (p *Parser) parseInsertStatement() *ast.InsertStatement {
 // need to figure out how to identify if its a bool, a string, or an int?
 func (p *Parser) parseValue() (ast.Statement, bool) {
 	switch p.curToken.Type {
-	case token.IDENT:
-		return p.parseIdentifier()
 	case token.STRING:
 		return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}, true
 	case token.INT:
@@ -331,6 +337,40 @@ func (p *Parser) parseInsertValues() (string, bool) {
 	fmt.Println("res:", res)
 	p.nextToken()
 	return res, true
+}
+
+func (p *Parser) parseColsList() []*ast.Ident {
+	values := []*ast.Ident{}
+
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return nil
+	}
+
+	p.nextToken()
+	value, ok := p.parseIdentifier()
+	if !ok {
+		return nil
+	}
+	values = append(values, value)
+
+	// Parse subsequent values
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // Consume the comma
+		p.nextToken() // Move to the next value
+
+		value, ok := p.parseIdentifier()
+		if !ok {
+			return nil
+		}
+		values = append(values, value)
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return values
 }
 
 func (p *Parser) parseCreateTableStatement() *ast.CreateTableStatement {
@@ -515,7 +555,6 @@ func (p *Parser) isValidName(name string) bool {
 			return false
 		}
 
-		// Check for other problematic characters
 		switch name[i] {
 		case '\'', '"', ';', '\\', '/', '.', ',', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=', '{', '}', '[', ']', ':', '<', '>', '?', '|', '`', '~':
 			msg := "name contains invalid characters"

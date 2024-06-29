@@ -93,8 +93,8 @@ func TestInsertStatement(t *testing.T) {
 		expectedIdentifier string
 		expectedVal        []string
 	}{
-		{"INSERT INTO dogs (\"stella\", \"labradoodle\");", "dogs", []string{"stella", "labradoodle"}},
-		{"INSERT INTO dogs (\"winnie\", \"cane corso\", \"3\" );", "dogs", []string{"winnie", "cane corso", "3"}},
+		{"INSERT INTO dogs VALUES (\"stella\", \"labradoodle\");", "dogs", []string{"stella", "labradoodle"}},
+		{"INSERT INTO dogs VALUES (\"winnie\", \"cane corso\", \"3\" );", "dogs", []string{"winnie", "cane corso", "3"}},
 	}
 
 	for _, tt := range tests {
@@ -129,11 +129,11 @@ func testInsertStatement(t *testing.T, s ast.Statement, name string, val []strin
 	}
 
 	for i := range val {
-		nodeVal := stmt.Right.Values[i]
+		nodeVal := stmt.Vals.Values[i]
 		switch n := nodeVal.(type) {
 		case *ast.StringLiteral:
 			if n.Value != val[i] {
-				t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Right.Values[i].TokenLiteral())
+				t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Vals.Values[i].TokenLiteral())
 				return false
 			}
 		}
@@ -185,22 +185,19 @@ func testInsertStatementDouble(t *testing.T, s ast.Statement, name string, cols,
 	}
 
 	for i := range cols {
-		nodeCols := stmt.Left.Values[i]
-		switch n := nodeCols.(type) {
-		case *ast.StringLiteral:
-			if n.Value != cols[i] {
-				t.Errorf("expected column name: '%s'. got=%s", cols[i], stmt.Right.Values[i].TokenLiteral())
-				return false
-			}
+		nodeCols := stmt.Cols.Values[i]
+		if nodeCols.Val != cols[i] {
+			t.Errorf("expected column name: '%s'. got=%s", cols[i], stmt.Cols.Values[i].TokenLiteral())
+			return false
 		}
 	}
 
 	for i := range vals {
-		nodeVal := stmt.Right.Values[i]
+		nodeVal := stmt.Vals.Values[i]
 		switch n := nodeVal.(type) {
 		case *ast.StringLiteral:
 			if n.Value != vals[i] {
-				t.Errorf("expected value name: '%s'. got=%s", vals[i], stmt.Right.Values[i].TokenLiteral())
+				t.Errorf("expected value name: '%s'. got=%s", vals[i], stmt.Vals.Values[i].TokenLiteral())
 				return false
 			}
 		}

@@ -55,11 +55,12 @@ type DeleteStatement struct {
 func (ds *DeleteStatement) statementNode()       {}
 func (ds *DeleteStatement) TokenLiteral() string { return ds.Token.Literal }
 
+// change cols to insert cols
 type InsertStatement struct {
 	Token token.Token
 	TName *Identifier
-	Left  *InsertVals
-	Right *InsertVals
+	Cols  *InsertCols
+	Vals  *InsertVals
 }
 
 func (is *InsertStatement) statementNode()       {}
@@ -72,6 +73,14 @@ type InsertVals struct {
 
 func (iV *InsertVals) statementNode()       {}
 func (iV *InsertVals) TokenLiteral() string { return iV.Token.Literal }
+
+type InsertCols struct {
+	Token  token.Token // the '('
+	Values []*Ident
+}
+
+func (iC *InsertCols) statementNode()       {}
+func (iC *InsertCols) TokenLiteral() string { return iC.Token.Literal }
 
 type StringLiteral struct {
 	Token token.Token

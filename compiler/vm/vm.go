@@ -10,6 +10,7 @@ import (
 	tree "github.com/aidanjjenkins/bplustree"
 	"github.com/aidanjjenkins/compiler/code"
 	c "github.com/aidanjjenkins/compiler/compile"
+	o "github.com/aidanjjenkins/compiler/object"
 )
 
 // ------------------------------------------------
@@ -44,8 +45,8 @@ func newPool() *Pool {
 type VM struct {
 	Pool         *Pool
 	Instructions code.Instructions
-	constants    []code.Obj
-	Stack        []code.Obj
+	constants    []o.Obj
+	Stack        []o.Obj
 	sp           int
 }
 
@@ -54,7 +55,7 @@ func New(bytecode *c.Bytecode) *VM {
 		Pool:         newPool(),
 		Instructions: bytecode.Instructions,
 		constants:    bytecode.Constants,
-		Stack:        make([]code.Obj, StackSize),
+		Stack:        make([]o.Obj, StackSize),
 		sp:           0,
 	}
 
@@ -91,7 +92,7 @@ func NewError(message string) error {
 	return &VMError{Message: message}
 }
 
-func (vm *VM) push(obj code.Obj) error {
+func (vm *VM) push(obj o.Obj) error {
 	if vm.sp >= StackSize {
 		return fmt.Errorf("Stack overflow")
 	}
@@ -101,13 +102,14 @@ func (vm *VM) push(obj code.Obj) error {
 	return nil
 }
 
-func (vm *VM) pop() code.Obj {
+func (vm *VM) pop() o.Obj {
 	o := vm.Stack[vm.sp-1]
 	vm.sp--
 
 	return o
 }
 
+// make sure index still works, i chagned the opcode from Opconstant to OpAddIndex
 func (vm *VM) Run() error {
 	for ip := 0; ip < len(vm.Instructions); ip++ {
 		op := code.Opcode(vm.Instructions[ip])
@@ -121,7 +123,7 @@ func (vm *VM) Run() error {
 			}
 		case code.OpEncodeStringVal:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
-			encoded := code.EncodedVal{Val: encode(vm.constants[opRead])}
+			encoded := o.EncodedVal{Val: encode(vm.constants[opRead])}
 			err := vm.push(&encoded)
 			if err != nil {
 				return err
@@ -129,7 +131,7 @@ func (vm *VM) Run() error {
 		case code.OpEncodeTableCell:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 
-			encoded := code.EncodedVal{Val: encode(vm.constants[opRead])}
+			encoded := o.EncodedVal{Val: encode(vm.constants[opRead])}
 			err := vm.push(&encoded)
 			if err != nil {
 				return err
@@ -140,8 +142,8 @@ func (vm *VM) Run() error {
 		case code.OpTableNameSearch:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 			table := vm.constants[opRead]
-			if t, ok := table.(*code.TableName); ok {
-				tName := code.TableName{Value: t.Value}
+			if t, ok := table.(*o.TableName); ok {
+				tName := o.TableName{Value: t.Value}
 				err := vm.push(&tName)
 				if err != nil {
 					return err
@@ -150,8 +152,8 @@ func (vm *VM) Run() error {
 		case code.OpWhereCondition:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 			where := vm.constants[opRead]
-			if w, ok := where.(*code.Where); ok {
-				col := code.Where{Column: w.Column, Value: w.Value}
+			if w, ok := where.(*o.Where); ok {
+				col := o.Where{Column: w.Column, Value: w.Value}
 				err := vm.push(&col)
 				if err != nil {
 					return err
@@ -161,7 +163,7 @@ func (vm *VM) Run() error {
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 			table := vm.constants[opRead]
 			switch table := table.(type) {
-			case *code.TableName:
+			case *o.TableName:
 				vm.executeAddIndex(table.Value)
 			}
 		case code.OpSelect:
@@ -169,10 +171,15 @@ func (vm *VM) Run() error {
 			vm.executeRowSearch(int(numVals))
 			for vm.sp > 0 {
 				val := vm.pop()
-				if v, ok := val.(*code.FoundRow); ok {
+				if v, ok := val.(*o.FoundRow); ok {
 					fmt.Printf(">>> %s \n", v.Val)
 				}
 			}
+
+		// create a table object then decide what to do
+		case code.OpCheckCol:
+			// begin refactor tomorrow, need cases for colcheck, values and mabye table?
+			// if refactor is quick, figure out null values?
 		case code.OpInsertRow:
 			numVals := code.ReadUint8(vm.Instructions[ip+1:])
 			vm.executeRowWrite(int(numVals))
@@ -241,18 +248,18 @@ func readRow(offset int64, filename string) ([]byte, error) {
 	return bytes, nil
 }
 
-func encode(obj code.Obj) []byte {
+func encode(obj o.Obj) []byte {
 	switch obj := obj.(type) {
-	case *code.TableName:
+	case *o.TableName:
 		return encodeString(obj.Value)
-	case *code.ColCell:
+	case *o.ColCell:
 		cell := encodeString(obj.Name)
 		cell = append(cell, encodeString(obj.ColType)...)
 		cell = append(cell, encodeBool(obj.Index))
 		cell = append(cell, encodeBool(obj.Unique))
 		cell = append(cell, encodeBool(obj.Pk))
 		return cell
-	case *code.Col:
+	case *o.Col:
 		return encodeString(obj.Value)
 	}
 	return nil
@@ -304,7 +311,7 @@ func (vm *VM) executeTableWrite(numVals int) error {
 	write := []byte{}
 	for numVals > 0 {
 		val := vm.pop()
-		if v, ok := val.(*code.EncodedVal); ok {
+		if v, ok := val.(*o.EncodedVal); ok {
 			write = append(v.Val, write...)
 		}
 
@@ -379,7 +386,7 @@ func (vm *VM) executeRowWrite(numVals int) {
 	write := []byte{}
 	for numVals > 0 {
 		val := vm.pop()
-		if v, ok := val.(*code.EncodedVal); ok {
+		if v, ok := val.(*o.EncodedVal); ok {
 			write = append(v.Val, write...)
 		}
 
@@ -424,9 +431,9 @@ func (vm *VM) executeRowSearch(numVals int) {
 	for numVals > 0 {
 		popped := vm.pop()
 		switch obj := popped.(type) {
-		case *code.TableName:
+		case *o.TableName:
 			table = obj.Value
-		case *code.Where:
+		case *o.Where:
 			cols2Find = append([]string{obj.Column}, cols2Find...)
 			vals2Find = append([]string{obj.Value}, vals2Find...)
 		}
@@ -502,7 +509,7 @@ func (vm *VM) walkTable(filePath, tName string, idxs []int, vals []string) []str
 			continue
 		}
 
-		f := &code.FoundRow{Val: decoded[1:]}
+		f := &o.FoundRow{Val: decoded[1:]}
 		vm.push(f)
 	}
 
@@ -530,7 +537,7 @@ func (vm *VM) executeAddIndex(tName string) {
 	for vm.sp > 0 {
 		val := vm.pop()
 		switch v := val.(type) {
-		case *code.Col:
+		case *o.Col:
 			cols = append(cols, v.Value)
 		}
 	}

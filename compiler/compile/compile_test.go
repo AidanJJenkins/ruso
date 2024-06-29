@@ -7,12 +7,13 @@ import (
 	"github.com/aidanjjenkins/compiler/ast"
 	"github.com/aidanjjenkins/compiler/code"
 	"github.com/aidanjjenkins/compiler/lexer"
+	o "github.com/aidanjjenkins/compiler/object"
 	"github.com/aidanjjenkins/compiler/parser"
 )
 
 func TestIndex(t *testing.T) {
-	name := code.TableName{Value: "dogs"}
-	col := code.Col{Value: "name"}
+	name := o.TableName{Value: "dogs"}
+	col := o.Col{Value: "name"}
 	tests := []compilerTestCase{
 		{
 			input:             "CREATE INDEX ON dogs (name);",
@@ -28,8 +29,8 @@ func TestIndex(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
-	cell := code.ColCell{Name: "name", ColType: "varchar", Unique: false, Index: false, Pk: false}
-	name := code.TableName{Value: "people"}
+	cell := o.ColCell{Name: "name", ColType: "varchar", Unique: false, Index: false, Pk: false}
+	name := o.TableName{Value: "people"}
 	tests := []compilerTestCase{
 		{
 			input:             "CREATE TABLE people (name varchar);",
@@ -46,12 +47,12 @@ func TestCreateTable(t *testing.T) {
 }
 
 func TestInsertRow(t *testing.T) {
-	name := code.TableName{Value: "dogs"}
-	col1 := code.Col{Value: "stella"}
-	col2 := code.Col{Value: "labradoodle"}
+	name := o.TableName{Value: "dogs"}
+	col1 := o.Col{Value: "stella"}
+	col2 := o.Col{Value: "labradoodle"}
 	tests := []compilerTestCase{
 		{
-			input:             "INSERT INTO dogs (\"stella\", \"labradoodle\");",
+			input:             "INSERT INTO dogs VALUES (\"stella\", \"labradoodle\");",
 			expectedConstants: []interface{}{name, col1, col2},
 			expectedInstructions: []code.Instructions{
 				code.Make(code.OpEncodeStringVal, 0),
@@ -65,9 +66,33 @@ func TestInsertRow(t *testing.T) {
 	runCompilerTests(t, tests)
 }
 
+func TestInsertRowDouble(t *testing.T) {
+	name := o.TableName{Value: "dogs"}
+	col1 := o.Col{Value: "col1"}
+	col2 := o.Col{Value: "col2"}
+	val1 := o.Col{Value: "val1"}
+	val2 := o.Col{Value: "val2"}
+	tests := []compilerTestCase{
+		{
+			input:             "INSERT INTO dogs (col1, col2) VALUES (\"val1\", \"val2\");",
+			expectedConstants: []interface{}{name, col1, col2, val1, val2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpEncodeStringVal, 0),
+				code.Make(code.OpCheckCol, 1),
+				code.Make(code.OpCheckCol, 2),
+				code.Make(code.OpEncodeStringVal, 3),
+				code.Make(code.OpEncodeStringVal, 4),
+				code.Make(code.OpInsertRow, 5),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
 func TestSelect(t *testing.T) {
-	where := code.Where{Column: "name", Value: "rtx 4090"}
-	name := code.TableName{Value: "wishlist"}
+	where := o.Where{Column: "name", Value: "rtx 4090"}
+	name := o.TableName{Value: "wishlist"}
 	tests := []compilerTestCase{
 		{
 			input:             "SELECT * FROM wishlist WHERE name = \"rtx 4090\";",
@@ -126,7 +151,8 @@ func testInstructions(
 	actual code.Instructions,
 ) error {
 	concatted := concatInstructions(expected)
-
+	// fmt.Println("concatted expected: ", concatted)
+	// fmt.Println("actual: ", actual)
 	if len(actual) != len(concatted) {
 		return fmt.Errorf("wrong instructions length.\nwant=%q\ngot =%q",
 			concatted, actual)
@@ -155,7 +181,7 @@ func concatInstructions(s []code.Instructions) code.Instructions {
 func testConstants(
 	t *testing.T,
 	expected []interface{},
-	actual []code.Obj,
+	actual []o.Obj,
 ) error {
 	if len(expected) != len(actual) {
 		return fmt.Errorf("wrong number of constants. got=%d, want=%d",
@@ -164,25 +190,25 @@ func testConstants(
 
 	for i, constant := range expected {
 		switch constant := constant.(type) {
-		case code.TableName:
+		case o.TableName:
 			err := testTableName(constant, actual[i])
 			if err != nil {
 				return fmt.Errorf("constant %d - test Index failed: %s",
 					i, err)
 			}
-		case code.ColCell:
+		case o.ColCell:
 			err := testColCell(constant, actual[i])
 			if err != nil {
 				return fmt.Errorf("constant %d - test Index failed: %s",
 					i, err)
 			}
-		case code.Col:
+		case o.Col:
 			err := testCol(constant, actual[i])
 			if err != nil {
 				return fmt.Errorf("constant %d - test Index failed: %s",
 					i, err)
 			}
-		case code.Where:
+		case o.Where:
 			err := testWhere(constant, actual[i])
 			if err != nil {
 				return fmt.Errorf("constant %d - test Index failed: %s",
@@ -194,8 +220,8 @@ func testConstants(
 	return nil
 }
 
-func testTableName(expected code.TableName, actual code.Obj) error {
-	result, ok := actual.(*code.TableName)
+func testTableName(expected o.TableName, actual o.Obj) error {
+	result, ok := actual.(*o.TableName)
 	if !ok {
 		return fmt.Errorf("object is not same type. got=%T (%+v)",
 			actual, actual)
@@ -209,8 +235,8 @@ func testTableName(expected code.TableName, actual code.Obj) error {
 	return nil
 }
 
-func testColCell(expected code.ColCell, actual code.Obj) error {
-	result, ok := actual.(*code.ColCell)
+func testColCell(expected o.ColCell, actual o.Obj) error {
+	result, ok := actual.(*o.ColCell)
 	if !ok {
 		return fmt.Errorf("object is not same type. got=%T (%+v)",
 			actual, actual)
@@ -229,8 +255,8 @@ func testColCell(expected code.ColCell, actual code.Obj) error {
 	return nil
 }
 
-func testCol(expected code.Col, actual code.Obj) error {
-	result, ok := actual.(*code.Col)
+func testCol(expected o.Col, actual o.Obj) error {
+	result, ok := actual.(*o.Col)
 	if !ok {
 		return fmt.Errorf("object is not same type. got=%T (%+v)",
 			actual, actual)
@@ -243,8 +269,8 @@ func testCol(expected code.Col, actual code.Obj) error {
 	return nil
 }
 
-func testWhere(expected code.Where, actual code.Obj) error {
-	result, ok := actual.(*code.Where)
+func testWhere(expected o.Where, actual o.Obj) error {
+	result, ok := actual.(*o.Where)
 	if !ok {
 		return fmt.Errorf("object is not same type. got=%T (%+v)",
 			actual, actual)
