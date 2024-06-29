@@ -77,6 +77,28 @@ func TestInsertRowDouble(t *testing.T) {
 			input:             "INSERT INTO dogs (col1, col2) VALUES (\"val1\", \"val2\");",
 			expectedConstants: []interface{}{name, col1, col2, val1, val2},
 			expectedInstructions: []code.Instructions{
+
+				// create table object, get table and adds its columns to an array, leave rest null, push to stack
+				// as you get check col instructions, mark an array with positions corresponding to what order was given
+				// if a table has cols: name, age, breed, weight
+				// and the given cols are: age, name, weight
+				// mark an array as [0, 0, 0, 0]
+				//[0, 1, 0, 0]
+				//[2, 1, 0, 0]
+				//[2, 1, 0, 3]
+				// as you get the values to write, add them to an array that gets pushed to the stack,
+				// they should be encoded to bytes, then added to an an array of an array of bytes
+				//[7]
+				//[7, stella]
+				//[7, stella, 20]
+				// when done, loop through the values, add 1 to the loop's current index,
+				// and see where that number pops up in the marked array, thats it location in the final
+				//write
+
+				// as you go, the table info can have fields for the column traits,
+				// for example: "index" : [false, true, false, false]
+				// before you write, you can check the index field, and go to the second item, and insert it into the index
+
 				code.Make(code.OpEncodeStringVal, 0),
 				code.Make(code.OpCheckCol, 1),
 				code.Make(code.OpCheckCol, 2),
