@@ -334,7 +334,6 @@ func (p *Parser) parseInsertValues() (string, bool) {
 	if p.curTokenIs(token.RPAREN) {
 		return res, true
 	}
-	fmt.Println("res:", res)
 	p.nextToken()
 	return res, true
 }
@@ -555,6 +554,7 @@ func (p *Parser) isValidName(name string) bool {
 			return false
 		}
 
+		// Check for other problematic characters
 		switch name[i] {
 		case '\'', '"', ';', '\\', '/', '.', ',', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=', '{', '}', '[', ']', ':', '<', '>', '?', '|', '`', '~':
 			msg := "name contains invalid characters"

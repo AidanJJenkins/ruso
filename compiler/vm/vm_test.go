@@ -412,3 +412,4 @@ func testAddIndex(t *testing.T, stmt ast.Statement, comp *c.Compiler, tName stri
 
 	return true
 }
+

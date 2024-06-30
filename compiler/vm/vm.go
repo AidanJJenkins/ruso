@@ -3,31 +3,22 @@ package vm
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 
 	tree "github.com/aidanjjenkins/bplustree"
 	"github.com/aidanjjenkins/compiler/code"
 	c "github.com/aidanjjenkins/compiler/compile"
-	o "github.com/aidanjjenkins/compiler/object"
 )
 
 // ------------------------------------------------
-// TABLE LAYOUT
+// table row layout
 //  len       cell cols...     # of rows in table
 // | 8 bytes | unknown amount |      8 bytes      |
 // ------------------------------------------------
 // cell col layout
 // name | type | index | unique | primary key |
-// ------------------------------------------------
-
-// ------------------------------------------------
-//  ROW LAYOUT
-//  len       values
-// | 8 bytes | unknown amount|
-// ------------------------------------------------
-// values string layout
-// value | null byte|
 // ------------------------------------------------
 
 const TableFile string = "tables.db"
@@ -53,8 +44,8 @@ func newPool() *Pool {
 type VM struct {
 	Pool         *Pool
 	Instructions code.Instructions
-	constants    []o.Obj
-	Stack        []o.Obj
+	constants    []code.Obj
+	Stack        []code.Obj
 	sp           int
 }
 
@@ -63,7 +54,7 @@ func New(bytecode *c.Bytecode) *VM {
 		Pool:         newPool(),
 		Instructions: bytecode.Instructions,
 		constants:    bytecode.Constants,
-		Stack:        make([]o.Obj, StackSize),
+		Stack:        make([]code.Obj, StackSize),
 		sp:           0,
 	}
 
@@ -100,7 +91,7 @@ func NewError(message string) error {
 	return &VMError{Message: message}
 }
 
-func (vm *VM) push(obj o.Obj) error {
+func (vm *VM) push(obj code.Obj) error {
 	if vm.sp >= StackSize {
 		return fmt.Errorf("Stack overflow")
 	}
@@ -110,14 +101,13 @@ func (vm *VM) push(obj o.Obj) error {
 	return nil
 }
 
-func (vm *VM) pop() o.Obj {
+func (vm *VM) pop() code.Obj {
 	o := vm.Stack[vm.sp-1]
 	vm.sp--
 
 	return o
 }
 
-// make sure index still works, i chagned the opcode from Opconstant to OpAddIndex
 func (vm *VM) Run() error {
 	for ip := 0; ip < len(vm.Instructions); ip++ {
 		op := code.Opcode(vm.Instructions[ip])
@@ -131,7 +121,7 @@ func (vm *VM) Run() error {
 			}
 		case code.OpEncodeStringVal:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
-			encoded := o.EncodedVal{Val: encode(vm.constants[opRead])}
+			encoded := code.EncodedVal{Val: encode(vm.constants[opRead])}
 			err := vm.push(&encoded)
 			if err != nil {
 				return err
@@ -139,7 +129,7 @@ func (vm *VM) Run() error {
 		case code.OpEncodeTableCell:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 
-			encoded := o.EncodedVal{Val: encode(vm.constants[opRead])}
+			encoded := code.EncodedVal{Val: encode(vm.constants[opRead])}
 			err := vm.push(&encoded)
 			if err != nil {
 				return err
@@ -150,8 +140,8 @@ func (vm *VM) Run() error {
 		case code.OpTableNameSearch:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 			table := vm.constants[opRead]
-			if t, ok := table.(*o.TableName); ok {
-				tName := o.TableName{Value: t.Value}
+			if t, ok := table.(*code.TableName); ok {
+				tName := code.TableName{Value: t.Value}
 				err := vm.push(&tName)
 				if err != nil {
 					return err
@@ -160,8 +150,8 @@ func (vm *VM) Run() error {
 		case code.OpWhereCondition:
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 			where := vm.constants[opRead]
-			if w, ok := where.(*o.Where); ok {
-				col := o.Where{Column: w.Column, Value: w.Value}
+			if w, ok := where.(*code.Where); ok {
+				col := code.Where{Column: w.Column, Value: w.Value}
 				err := vm.push(&col)
 				if err != nil {
 					return err
@@ -171,7 +161,7 @@ func (vm *VM) Run() error {
 			opRead := code.ReadUint16(vm.Instructions[ip+1:])
 			table := vm.constants[opRead]
 			switch table := table.(type) {
-			case *o.TableName:
+			case *code.TableName:
 				vm.executeAddIndex(table.Value)
 			}
 		case code.OpSelect:
@@ -179,15 +169,10 @@ func (vm *VM) Run() error {
 			vm.executeRowSearch(int(numVals))
 			for vm.sp > 0 {
 				val := vm.pop()
-				if v, ok := val.(*o.FoundRow); ok {
+				if v, ok := val.(*code.FoundRow); ok {
 					fmt.Printf(">>> %s \n", v.Val)
 				}
 			}
-
-		// create a table object then decide what to do
-		case code.OpCheckCol:
-			// begin refactor tomorrow, need cases for colcheck, values and mabye table?
-			// if refactor is quick, figure out null values?
 		case code.OpInsertRow:
 			numVals := code.ReadUint8(vm.Instructions[ip+1:])
 			vm.executeRowWrite(int(numVals))
@@ -213,6 +198,24 @@ func (vm *VM) FindTable(name string) []byte {
 	}
 }
 
+func writeRow(data []byte, filename string) (uint32, error) {
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	fileLen := fileInfo.Size()
+
+	_, err = file.Write(data)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint32(fileLen), nil
+}
+
 func readRow(offset int64, filename string) ([]byte, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -236,6 +239,36 @@ func readRow(offset int64, filename string) ([]byte, error) {
 	}
 
 	return bytes, nil
+}
+
+func encode(obj code.Obj) []byte {
+	switch obj := obj.(type) {
+	case *code.TableName:
+		return encodeString(obj.Value)
+	case *code.ColCell:
+		cell := encodeString(obj.Name)
+		cell = append(cell, encodeString(obj.ColType)...)
+		cell = append(cell, encodeBool(obj.Index))
+		cell = append(cell, encodeBool(obj.Unique))
+		cell = append(cell, encodeBool(obj.Pk))
+		return cell
+	case *code.Col:
+		return encodeString(obj.Value)
+	}
+	return nil
+}
+
+func encodeString(s string) []byte {
+	encodedBytes := []byte(s)
+	encodedBytes = append(encodedBytes, 0x00)
+	return encodedBytes
+}
+
+func encodeBool(b bool) byte {
+	if b {
+		return 0xFF
+	}
+	return 0xFD
 }
 
 func DecodeBytes(data []byte) []string {
@@ -266,6 +299,73 @@ func DecodeTableCount(data []byte) int {
 	return int(counter)
 }
 
+// should be nicer way to insert tablename into index probably
+func (vm *VM) executeTableWrite(numVals int) error {
+	write := []byte{}
+	for numVals > 0 {
+		val := vm.pop()
+		if v, ok := val.(*code.EncodedVal); ok {
+			write = append(v.Val, write...)
+		}
+
+		numVals -= 1
+	}
+
+	count := make([]byte, RowLen)
+	binary.LittleEndian.PutUint32(count, uint32(0))
+	write = append(write, count...)
+
+	tName := getTableName(write)
+
+	l := len(write)
+	lenBuf := make([]byte, RowLen)
+	binary.LittleEndian.PutUint32(lenBuf, uint32(l))
+	write = append(lenBuf, write...)
+
+	offset, err := writeRow(write, TableFile)
+	if err != nil {
+		return fmt.Errorf("Error writing table to disk")
+	}
+
+	vm.Pool.Add(tName, offset)
+	return nil
+}
+
+func (vm *VM) incrememntRowCount(tName string) error {
+	offset, ok := vm.Pool.Search(tName)
+	if !ok {
+		return fmt.Errorf("Table not found")
+	} else {
+		row, err := readRow(int64(offset), TableFile)
+		if err != nil {
+			fmt.Println("Error finding table: ", err)
+		}
+
+		count := DecodeTableCount(row)
+		count++
+
+		updateCount := make([]byte, RowLen)
+		binary.LittleEndian.PutUint32(updateCount, uint32(count))
+
+		row = row[:len(row)-RowLen]
+		row = append(row, updateCount...)
+
+		file, err := os.OpenFile(TableFile, os.O_RDWR, 0644)
+		if err != nil {
+			fmt.Printf("Failed to open file: %v", err)
+		}
+		defer file.Close()
+
+		_, err = file.WriteAt(row, int64(offset)+RowLen)
+		if err != nil {
+			fmt.Printf("Failed to open file: %v", err)
+		}
+
+	}
+
+	return nil
+}
+
 func getTableName(data []byte) string {
 	for i, b := range data {
 		if b == 0 {
@@ -273,6 +373,47 @@ func getTableName(data []byte) string {
 		}
 	}
 	return string(data)
+}
+
+func (vm *VM) executeRowWrite(numVals int) {
+	write := []byte{}
+	for numVals > 0 {
+		val := vm.pop()
+		if v, ok := val.(*code.EncodedVal); ok {
+			write = append(v.Val, write...)
+		}
+
+		numVals -= 1
+	}
+
+	tName := getTableName(write)
+	err := vm.incrememntRowCount(tName)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return
+	}
+
+	l := len(write)
+	// do i need this big of a row length?
+	lenBuf := make([]byte, RowLen)
+	binary.LittleEndian.PutUint32(lenBuf, uint32(l))
+	write = append(lenBuf, write...)
+	writeRowWithoutIndex(write, RowsFile)
+}
+
+func writeRowWithoutIndex(data []byte, filename string) error {
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (vm *VM) executeRowSearch(numVals int) {
@@ -283,9 +424,9 @@ func (vm *VM) executeRowSearch(numVals int) {
 	for numVals > 0 {
 		popped := vm.pop()
 		switch obj := popped.(type) {
-		case *o.TableName:
+		case *code.TableName:
 			table = obj.Value
-		case *o.Where:
+		case *code.Where:
 			cols2Find = append([]string{obj.Column}, cols2Find...)
 			vals2Find = append([]string{obj.Value}, vals2Find...)
 		}
@@ -361,7 +502,7 @@ func (vm *VM) walkTable(filePath, tName string, idxs []int, vals []string) []str
 			continue
 		}
 
-		f := &o.FoundRow{Val: decoded[1:]}
+		f := &code.FoundRow{Val: decoded[1:]}
 		vm.push(f)
 	}
 
@@ -380,4 +521,134 @@ func searchRow(idxs []int, row, vals []string) bool {
 	}
 
 	return true
+}
+
+func (vm *VM) executeAddIndex(tName string) {
+	table := vm.FindTable(tName)
+	count := DecodeTableCount(table)
+	cols := []string{}
+	for vm.sp > 0 {
+		val := vm.pop()
+		switch v := val.(type) {
+		case *code.Col:
+			cols = append(cols, v.Value)
+		}
+	}
+
+	vm.markAsIndex(tName, cols)
+	decodedTable := DecodeBytes(table)
+	coldIdxs := getColIdxFromTable(decodedTable, cols)
+
+	if count > 0 {
+		vm.addExistingRowsToIndex(tName, coldIdxs, count)
+	}
+}
+
+// using the get coldidxfrom table to find out which item to insert,
+// at every row, add length to the "offset" var to keep track of offset,
+// if table name is correct, access idx from coldixfrom table that matchs, insert using offset and col val
+func (vm *VM) addExistingRowsToIndex(tName string, colIdx []int, count int) error {
+	// offset := 0
+	file, err := os.Open(RowsFile)
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return nil
+	}
+	defer file.Close()
+
+	rowsChecked := 0
+	for {
+
+		if rowsChecked >= count {
+			fmt.Println("checked all rows in table")
+			break
+		}
+		offset, err := file.Seek(0, io.SeekCurrent)
+		if err != nil {
+			fmt.Printf("Error getting offset: %v\n", err)
+			return nil
+		}
+
+		lengthBytes := make([]byte, 8)
+		_, err = file.Read(lengthBytes)
+		if err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			fmt.Printf("Error reading length: %v\n", err)
+			return nil
+		}
+
+		rowLength := binary.LittleEndian.Uint32(lengthBytes)
+
+		rowData := make([]byte, rowLength)
+		_, err = file.Read(rowData)
+		if err != nil {
+			fmt.Printf("Error reading row: %v\n", err)
+			return nil
+		}
+
+		decoded := DecodeBytes(rowData)
+		if decoded[0] != tName {
+			continue
+		}
+
+		if decoded[0] == tName {
+			for i := range colIdx {
+				// fmt.Println("col val: ", decoded[colIdx[i]])
+				// fmt.Println("offset: ", offset)
+
+				vm.Pool.Add(decoded[colIdx[i]], uint32(offset))
+			}
+
+		}
+	}
+
+	return nil
+}
+
+func (vm *VM) markAsIndex(tName string, cols []string) {
+	offset, ok := vm.Pool.Search(tName)
+	decoded := []string{}
+	if !ok {
+		fmt.Println("Table not found")
+		return
+	} else {
+		row, err := readRow(int64(offset), TableFile)
+		if err != nil {
+			fmt.Println("Error finding table: ", err)
+		}
+
+		decoded = DecodeBytes(row)
+	}
+
+	for i := range cols {
+		idx := slices.Index(decoded, cols[i])
+		decoded[idx+2] = "true"
+	}
+
+	buf := []byte{}
+	for i := range decoded {
+		if decoded[i] == "false" {
+			b := encodeBool(false)
+			buf = append(buf, b)
+		} else if decoded[i] == "true" {
+			b := encodeBool(true)
+			buf = append(buf, b)
+		} else {
+			encoded := encodeString(decoded[i])
+			buf = append(buf, encoded...)
+		}
+	}
+
+	file, err := os.OpenFile(TableFile, os.O_RDWR, 0644)
+	if err != nil {
+		fmt.Println("Error opening table file: ", err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteAt(buf, int64(offset)+int64(RowLen))
+	if err != nil {
+		fmt.Println("Error writing table file: ", err)
+	}
 }

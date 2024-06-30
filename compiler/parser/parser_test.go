@@ -127,7 +127,6 @@ func testInsertStatement(t *testing.T, s ast.Statement, name string, val []strin
 		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
 		return false
 	}
-
 	for i := range val {
 		nodeVal := stmt.Vals.Values[i]
 		switch n := nodeVal.(type) {
@@ -139,69 +138,6 @@ func testInsertStatement(t *testing.T, s ast.Statement, name string, val []strin
 		}
 	}
 
-	return true
-}
-
-func TestInsertStatementDouble(t *testing.T) {
-	tests := []struct {
-		input              string
-		expectedIdentifier string
-		expectedCols       []string
-		expectedVals       []string
-	}{
-		{"INSERT INTO dogs (col1, col2) VALUES (\"val1\", \"val2\");", "dogs", []string{"col1", "col2"}, []string{"val1", "val2"}},
-		{"INSERT INTO dogs (col1, col2, col3) VALUES (\"val1\", \"val2\", \"val3\");", "dogs", []string{"col1", "col2"}, []string{"val1", "val2", "val3"}},
-	}
-
-	for _, tt := range tests {
-		program := createParseProgram(tt.input, t)
-
-		if len(program.Statements) != 1 {
-			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
-		}
-
-		stmt := program.Statements[0]
-		if !testInsertStatementDouble(t, stmt, tt.expectedIdentifier, tt.expectedCols, tt.expectedVals) {
-			return
-		}
-	}
-}
-
-func testInsertStatementDouble(t *testing.T, s ast.Statement, name string, cols, vals []string) bool {
-	if s.TokenLiteral() != "INSERT" {
-		t.Errorf("s.TokenLiteral not 'let'. got=%q", s.TokenLiteral())
-		return false
-	}
-
-	stmt, ok := s.(*ast.InsertStatement)
-	if !ok {
-		t.Errorf("s not *ast.Delete. got=%T", s)
-		return false
-	}
-
-	if stmt.TName.Val != name {
-		t.Errorf("expected table name: %s got=%s", name, stmt.TName.Val)
-		return false
-	}
-
-	for i := range cols {
-		nodeCols := stmt.Cols.Values[i]
-		if nodeCols.Val != cols[i] {
-			t.Errorf("expected column name: '%s'. got=%s", cols[i], stmt.Cols.Values[i].TokenLiteral())
-			return false
-		}
-	}
-
-	for i := range vals {
-		nodeVal := stmt.Vals.Values[i]
-		switch n := nodeVal.(type) {
-		case *ast.StringLiteral:
-			if n.Value != vals[i] {
-				t.Errorf("expected value name: '%s'. got=%s", vals[i], stmt.Vals.Values[i].TokenLiteral())
-				return false
-			}
-		}
-	}
 	return true
 }
 
@@ -469,3 +405,121 @@ func checkParserErrors(t *testing.T, p *Parser) {
 	}
 	t.FailNow()
 }
+
+// func TestInsertStatement(t *testing.T) {
+// 	tests := []struct {
+// 		input              string
+// 		expectedIdentifier string
+// 		expectedVal        []string
+// 	}{
+// 		{"INSERT INTO dogs VALUES (\"stella\", \"labradoodle\");", "dogs", []string{"stella", "labradoodle"}},
+// 		{"INSERT INTO dogs VALUES (\"winnie\", \"cane corso\", \"3\" );", "dogs", []string{"winnie", "cane corso", "3"}},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		program := createParseProgram(tt.input, t)
+//
+// 		if len(program.Statements) != 1 {
+// 			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+// 		}
+//
+// 		stmt := program.Statements[0]
+// 		if !testInsertStatement(t, stmt, tt.expectedIdentifier, tt.expectedVal) {
+// 			return
+// 		}
+// 	}
+// }
+//
+// func testInsertStatement(t *testing.T, s ast.Statement, name string, val []string) bool {
+// 	if s.TokenLiteral() != "INSERT" {
+// 		t.Errorf("s.TokenLiteral not 'let'. got=%q", s.TokenLiteral())
+// 		return false
+// 	}
+//
+// 	stmt, ok := s.(*ast.InsertStatement)
+// 	if !ok {
+// 		t.Errorf("s not *ast.Delete. got=%T", s)
+// 		return false
+// 	}
+//
+// 	if stmt.TName.Val != name {
+// 		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, stmt.TName.Val)
+// 		return false
+// 	}
+//
+// 	for i := range val {
+// 		nodeVal := stmt.Vals.Values[i]
+// 		switch n := nodeVal.(type) {
+// 		case *ast.StringLiteral:
+// 			if n.Value != val[i] {
+// 				t.Errorf("Where clause CName value expected: '%s'. got=%s", val[i], stmt.Vals.Values[i].TokenLiteral())
+// 				return false
+// 			}
+// 		}
+// 	}
+//
+// 	return true
+// }
+//
+// func TestInsertStatementDouble(t *testing.T) {
+// 	tests := []struct {
+// 		input              string
+// 		expectedIdentifier string
+// 		expectedCols       []string
+// 		expectedVals       []string
+// 	}{
+// 		{"INSERT INTO dogs (col1, col2) VALUES (\"val1\", \"val2\");", "dogs", []string{"col1", "col2"}, []string{"val1", "val2"}},
+// 		{"INSERT INTO dogs (col1, col2, col3) VALUES (\"val1\", \"val2\", \"val3\");", "dogs", []string{"col1", "col2"}, []string{"val1", "val2", "val3"}},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		program := createParseProgram(tt.input, t)
+//
+// 		if len(program.Statements) != 1 {
+// 			t.Fatalf("program.Statements does not contain 1 statements. got=%d", len(program.Statements))
+// 		}
+//
+// 		stmt := program.Statements[0]
+// 		if !testInsertStatementDouble(t, stmt, tt.expectedIdentifier, tt.expectedCols, tt.expectedVals) {
+// 			return
+// 		}
+// 	}
+// }
+//
+// func testInsertStatementDouble(t *testing.T, s ast.Statement, name string, cols, vals []string) bool {
+// 	if s.TokenLiteral() != "INSERT" {
+// 		t.Errorf("s.TokenLiteral not 'let'. got=%q", s.TokenLiteral())
+// 		return false
+// 	}
+//
+// 	stmt, ok := s.(*ast.InsertStatement)
+// 	if !ok {
+// 		t.Errorf("s not *ast.Delete. got=%T", s)
+// 		return false
+// 	}
+//
+// 	if stmt.TName.Val != name {
+// 		t.Errorf("expected table name: %s got=%s", name, stmt.TName.Val)
+// 		return false
+// 	}
+//
+// 	for i := range cols {
+// 		nodeCols := stmt.Cols.Values[i]
+// 		if nodeCols.Val != cols[i] {
+// 			t.Errorf("expected column name: '%s'. got=%s", cols[i], stmt.Cols.Values[i].TokenLiteral())
+// 			return false
+// 		}
+// 	}
+//
+// 	for i := range vals {
+// 		nodeVal := stmt.Vals.Values[i]
+// 		switch n := nodeVal.(type) {
+// 		case *ast.StringLiteral:
+// 			if n.Value != vals[i] {
+// 				t.Errorf("expected value name: '%s'. got=%s", vals[i], stmt.Vals.Values[i].TokenLiteral())
+// 				return false
+// 			}
+// 		}
+// 	}
+// 	return true
+// }

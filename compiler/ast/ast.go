@@ -1,8 +1,6 @@
 package ast
 
-import (
-	"github.com/aidanjjenkins/compiler/token"
-)
+import "github.com/aidanjjenkins/compiler/token"
 
 type Node interface {
 	TokenLiteral() string
@@ -54,6 +52,45 @@ type DeleteStatement struct {
 
 func (ds *DeleteStatement) statementNode()       {}
 func (ds *DeleteStatement) TokenLiteral() string { return ds.Token.Literal }
+
+// type InsertStatement struct {
+// 	Token  token.Token
+// 	TName  *Identifier
+// 	Values []string
+// }
+//
+// func (is *InsertStatement) statementNode()       {}
+// func (is *InsertStatement) TokenLiteral() string { return is.Token.Literal }
+
+type UpdateStatement struct {
+	Token     token.Token
+	TName     *Identifier
+	Cols      []*Identifier
+	Values    []string
+	Condition []*Condition
+}
+
+func (us *UpdateStatement) statementNode()       {}
+func (us *UpdateStatement) TokenLiteral() string { return us.Token.Literal }
+
+type CreateTableStatement struct {
+	Token    token.Token
+	TName    *Identifier
+	Cols     []string
+	ColTypes []string
+}
+
+func (cts *CreateTableStatement) statementNode()       {}
+func (cts *CreateTableStatement) TokenLiteral() string { return cts.Token.Literal }
+
+type CreateIndexStatement struct {
+	Token token.Token
+	TName *Identifier
+	Cols  []*Identifier
+}
+
+func (cis *CreateIndexStatement) statementNode()       {}
+func (cis *CreateIndexStatement) TokenLiteral() string { return cis.Token.Literal }
 
 // change cols to insert cols
 type InsertStatement struct {
@@ -113,33 +150,3 @@ type Ident struct {
 
 func (i *Ident) statementNode()       {}
 func (i *Ident) TokenLiteral() string { return i.Token.Literal }
-
-type UpdateStatement struct {
-	Token     token.Token
-	TName     *Identifier
-	Cols      []*Identifier
-	Values    []string
-	Condition []*Condition
-}
-
-func (us *UpdateStatement) statementNode()       {}
-func (us *UpdateStatement) TokenLiteral() string { return us.Token.Literal }
-
-type CreateTableStatement struct {
-	Token    token.Token
-	TName    *Identifier
-	Cols     []string
-	ColTypes []string
-}
-
-func (cts *CreateTableStatement) statementNode()       {}
-func (cts *CreateTableStatement) TokenLiteral() string { return cts.Token.Literal }
-
-type CreateIndexStatement struct {
-	Token token.Token
-	TName *Identifier
-	Cols  []*Identifier
-}
-
-func (cis *CreateIndexStatement) statementNode()       {}
-func (cis *CreateIndexStatement) TokenLiteral() string { return cis.Token.Literal }
