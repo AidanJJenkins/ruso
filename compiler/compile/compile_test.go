@@ -51,13 +51,37 @@ func TestInsertRow(t *testing.T) {
 	col2 := code.Col{Value: "labradoodle"}
 	tests := []compilerTestCase{
 		{
-			input:             "INSERT INTO dogs (\"stella\", \"labradoodle\");",
+			input:             "INSERT INTO dogs VALUES (\"stella\", \"labradoodle\");",
 			expectedConstants: []interface{}{name, col1, col2},
 			expectedInstructions: []code.Instructions{
-				code.Make(code.OpEncodeStringVal, 0),
-				code.Make(code.OpEncodeStringVal, 1),
-				code.Make(code.OpEncodeStringVal, 2),
-				code.Make(code.OpInsertRow, 3),
+				code.Make(code.OpTableInfo, 0),
+				code.Make(code.OpValInfo, 1),
+				code.Make(code.OpValInfo, 2),
+				code.Make(code.OpInsert),
+			},
+		},
+	}
+
+	runCompilerTests(t, tests)
+}
+
+func TestInsertRow2(t *testing.T) {
+	name := code.TableName{Value: "dogs"}
+	col1 := code.Col{Value: "col1"}
+	col2 := code.Col{Value: "col2"}
+	val1 := code.Col{Value: "stella"}
+	val2 := code.Col{Value: "labradoodle"}
+	tests := []compilerTestCase{
+		{
+			input:             "INSERT INTO dogs (col1, col2) VALUES (\"stella\", \"labradoodle\");",
+			expectedConstants: []interface{}{name, col1, col2, val1, val2},
+			expectedInstructions: []code.Instructions{
+				code.Make(code.OpTableInfo, 0),
+				code.Make(code.OpColInfo, 1),
+				code.Make(code.OpColInfo, 2),
+				code.Make(code.OpValInfo, 3),
+				code.Make(code.OpValInfo, 4),
+				code.Make(code.OpInsert),
 			},
 		},
 	}
@@ -167,25 +191,25 @@ func testConstants(
 		case code.TableName:
 			err := testTableName(constant, actual[i])
 			if err != nil {
-				return fmt.Errorf("constant %d - test Index failed: %s",
+				return fmt.Errorf("constant %d - test TableName failed: %s",
 					i, err)
 			}
 		case code.ColCell:
 			err := testColCell(constant, actual[i])
 			if err != nil {
-				return fmt.Errorf("constant %d - test Index failed: %s",
+				return fmt.Errorf("constant %d - test ColCell failed: %s",
 					i, err)
 			}
 		case code.Col:
 			err := testCol(constant, actual[i])
 			if err != nil {
-				return fmt.Errorf("constant %d - test Index failed: %s",
+				return fmt.Errorf("constant %d - test Col failed: %s",
 					i, err)
 			}
 		case code.Where:
 			err := testWhere(constant, actual[i])
 			if err != nil {
-				return fmt.Errorf("constant %d - test Index failed: %s",
+				return fmt.Errorf("constant %d - test Where failed: %s",
 					i, err)
 			}
 		}
@@ -285,4 +309,3 @@ func checkParserErrors(t *testing.T, p *parser.Parser) {
 	}
 	t.FailNow()
 }
-

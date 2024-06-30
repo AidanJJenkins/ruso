@@ -37,8 +37,6 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 		c.emit(code.OpCreateTable, len(node.Cols)+1)
 	case *ast.CreateIndexStatement:
-		// for every index given, add constant and emit code to dq, encode, push to stack
-		// when done, final instruction will add name to constants, and tell stack to dq all values off the stack to actually execute the add index
 		for i := range node.Cols {
 			col := &code.Col{Value: node.Cols[i].Val}
 			c.emit(code.OpConstant, c.addConstant(col))
@@ -53,14 +51,39 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.emit(code.OpWhereCondition, c.addConstant(col))
 		}
 		c.emit(code.OpSelect, len(node.Condition)+1)
+		// case *ast.InsertStatement:
+		// 	tName := &code.TableName{Value: node.TName.Val}
+		// 	c.emit(code.OpEncodeStringVal, c.addConstant(tName))
+		// 	for i := range node.Values {
+		// 		col := &code.Col{Value: node.Values[i]}
+		// 		c.emit(code.OpEncodeStringVal, c.addConstant(col))
+		// 	}
+		// 	c.emit(code.OpInsertRow, len(node.Values)+1)
 	case *ast.InsertStatement:
 		tName := &code.TableName{Value: node.TName.Val}
-		c.emit(code.OpEncodeStringVal, c.addConstant(tName))
-		for i := range node.Values {
-			col := &code.Col{Value: node.Values[i]}
-			c.emit(code.OpEncodeStringVal, c.addConstant(col))
+		c.emit(code.OpTableInfo, c.addConstant(tName))
+
+		numVals := 0
+		if node.Cols != nil {
+			c.Compile(node.Cols)
+			numVals += len(node.Cols.Values)
 		}
-		c.emit(code.OpInsertRow, len(node.Values)+1)
+		c.Compile(node.Vals)
+		numVals += len(node.Vals.Values)
+		c.emit(code.OpInsert)
+	case *ast.InsertVals:
+		for i := range node.Values {
+			switch v := node.Values[i].(type) {
+			case *ast.StringLiteral:
+				col := &code.Col{Value: v.Value}
+				c.emit(code.OpValInfo, c.addConstant(col))
+			}
+		}
+	case *ast.InsertCols:
+		for i := range node.Values {
+			col := &code.Col{Value: node.Values[i].Val}
+			c.emit(code.OpColInfo, c.addConstant(col))
+		}
 	case *ast.UpdateStatement:
 	}
 	return nil
@@ -93,29 +116,3 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 
 	return pos
 }
-
-// case *ast.InsertStatement:
-// 	tName := &o.TableName{Value: node.TName.Val}
-// 	c.emit(code.OpTableInfo, c.addConstant(tName))
-//
-// 	numVals := 0
-// 	if node.Cols != nil {
-// 		c.Compile(node.Cols)
-// 		numVals += len(node.Cols.Values)
-// 	}
-// 	c.Compile(node.Vals)
-// 	numVals += len(node.Vals.Values)
-// 	c.emit(code.OpInsertRow)
-// case *ast.InsertVals:
-// 	for i := range node.Values {
-// 		switch v := node.Values[i].(type) {
-// 		case *ast.StringLiteral:
-// 			col := &o.Col{Value: v.Value}
-// 			c.emit(code.OpValInfo, c.addConstant(col))
-// 		}
-// 	}
-// case *ast.InsertCols:
-// 	for i := range node.Values {
-// 		col := &o.Col{Value: node.Values[i].Val}
-// 		c.emit(code.OpColInfo, c.addConstant(col))
-// 	}

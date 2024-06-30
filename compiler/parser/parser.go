@@ -242,9 +242,11 @@ func (p *Parser) parseInsertStatement() *ast.InsertStatement {
 		if !p.expectPeek(token.VALUES) {
 			return nil
 		}
+
 		if !p.expectPeek(token.LPAREN) {
 			return nil
 		}
+
 		toInsert := &ast.InsertVals{}
 		toInsert.Token = p.curToken
 		list := p.parseValsList()

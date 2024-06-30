@@ -48,6 +48,9 @@ const (
 	OpInsertRow
 	OpTableNameSearch
 	OpWhereCondition
+	OpTableInfo
+	OpColInfo
+	OpValInfo
 )
 
 type Definition struct {
@@ -67,6 +70,9 @@ var definitions = map[Opcode]*Definition{
 	OpSelect:           {"OpSelect", []int{1}},
 	OpWhereCondition:   {"OpWhereCondition", []int{2}},
 	OpTableNameSearch:  {"OpTableNameSearch", []int{2}},
+	OpTableInfo:        {"OpTableInfo", []int{2}},
+	OpColInfo:          {"OpColInfo", []int{2}},
+	OpValInfo:          {"OpValInfo", []int{2}},
 }
 
 func Make(op Opcode, operands ...int) []byte {
@@ -323,17 +329,3 @@ func (fr *FoundRow) Type() Object { return FOUND_ROW }
 func (fr *FoundRow) Inspect() string {
 	return fmt.Sprintf("Found row: %s,:", fr.Val)
 }
-
-//-----------------dont delete need later-------------------------
-// const (
-// 	OpTableInfo
-// 	OpColInfo
-// 	OpValInfo
-// )
-//
-// var definitions = map[Opcode]*Definition{
-// 	OpTableInfo:        {"OpTableInfo", []int{2}},
-// 	OpColInfo:          {"OpColInfo", []int{2}},
-// 	OpValInfo:          {"OpValInfo", []int{2}},
-// }
-
