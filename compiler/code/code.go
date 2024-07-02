@@ -31,6 +31,7 @@ const (
 	ENCODED_VAL                   = "ENCODED_VAL"
 	FOUND_ROW                     = "FOUND_ROW"
 	CONSTANT_VAL                  = "CONSTANT_VAL"
+	TABLE_INFO                    = "TABLE_INFO"
 	OpCreateTable          Opcode = iota
 	OpCreateIndex
 	OpSelect
@@ -73,6 +74,7 @@ var definitions = map[Opcode]*Definition{
 	OpTableInfo:        {"OpTableInfo", []int{2}},
 	OpColInfo:          {"OpColInfo", []int{2}},
 	OpValInfo:          {"OpValInfo", []int{2}},
+	OpInsert:           {"OpInsert", []int{}},
 }
 
 func Make(op Opcode, operands ...int) []byte {
@@ -328,4 +330,18 @@ type FoundRow struct {
 func (fr *FoundRow) Type() Object { return FOUND_ROW }
 func (fr *FoundRow) Inspect() string {
 	return fmt.Sprintf("Found row: %s,:", fr.Val)
+}
+
+type TableInfo struct {
+	Name       string
+	Cols       []*ColCell
+	Marker     []int
+	Write      [][]byte
+	ColCounter int
+	ValCounter int
+}
+
+func (tI *TableInfo) Type() Object { return TABLE_INFO }
+func (tI *TableInfo) Inspect() string {
+	return fmt.Sprintf("table name: %s,", tI.Name)
 }

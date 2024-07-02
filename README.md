@@ -5,8 +5,9 @@ to create table:
     - only supports varchar as a type (this is temporary)
 
 to insert: 
-		INSERT INTO wishlist ("4090", "nvidia");
-    - insert must contain all values, in the correct order (this is temporary, will be able to insert like an actual sql insert soon)
+		INSERT INTO table_name (column1, column2) VALUES ("value1", "value2");
+		or
+		INSERT INTO table_name VALUES ("value1", "value2");
 
 to create index on a column/s:
 		CREATE INDEX ON wishlist (name, price);

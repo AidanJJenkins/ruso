@@ -173,9 +173,66 @@ func (vm *VM) Run() error {
 					fmt.Printf(">>> %s \n", v.Val)
 				}
 			}
+			// create table object, get table and adds its columns to an array, leave rest null, push to stack
+			// as you get check col instructions, mark an array with positions corresponding to what order was given
+			// if a table has cols: name, age, breed, weight
+			// and the given cols are: age, name, weight
+			// mark an array as [0, 0, 0, 0]
+			//[0, 1, 0, 0]
+			//[2, 1, 0, 0]
+			//[2, 1, 0, 3]
+			// as you get the values to write, add them to an array that gets pushed to the stack,
+			// they should be encoded to bytes, then added to an an array of an array of bytes
+			//[7, 0xFE, 0xFE, 0xFE]
+			//[7, stella, 0xFE, 0xFE]
+			//[7, stella, 0xFE ,20]
 		case code.OpInsertRow:
 			numVals := code.ReadUint8(vm.Instructions[ip+1:])
 			vm.executeRowWrite(int(numVals))
+		case code.OpTableInfo:
+			opRead := code.ReadUint16(vm.Instructions[ip+1:])
+			table := vm.constants[opRead]
+			switch table := table.(type) {
+			case *code.TableName:
+				tObj := vm.createTableObj(table.Value)
+				err := vm.push(tObj)
+				if err != nil {
+					return err
+				}
+			}
+		case code.OpColInfo:
+			opRead := code.ReadUint16(vm.Instructions[ip+1:])
+			col := vm.constants[opRead]
+			switch col := col.(type) {
+			case *code.Col:
+				tableObj := vm.pop()
+				if t, ok := tableObj.(*code.TableInfo); ok {
+					vm.colCheck(col.Value, t)
+				}
+				err := vm.push(tableObj)
+				if err != nil {
+					return err
+				}
+			}
+		case code.OpValInfo:
+			opRead := code.ReadUint16(vm.Instructions[ip+1:])
+			col := vm.constants[opRead]
+			switch col := col.(type) {
+			case *code.Col:
+				tableObj := vm.pop()
+				if t, ok := tableObj.(*code.TableInfo); ok {
+					vm.insertVals(col.Value, t)
+				}
+				err := vm.push(tableObj)
+				if err != nil {
+					return err
+				}
+			}
+		case code.OpInsert:
+			tableObj := vm.pop()
+			if t, ok := tableObj.(*code.TableInfo); ok {
+				vm.write(t)
+			}
 		case code.OpUpdate:
 		}
 	}
@@ -281,6 +338,8 @@ func DecodeBytes(data []byte) []string {
 			result = append(result, "true")
 		} else if data[i] == 0xFD {
 			result = append(result, "false")
+		} else if data[i] == 0xFE {
+			result = append(result, " ")
 		} else {
 			str := ""
 			for j := i; j < len(data) && data[j] != 0x00; j++ {

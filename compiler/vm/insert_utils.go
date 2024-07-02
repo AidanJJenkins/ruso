@@ -1,307 +1,131 @@
 package vm
 
-//
-// import (
-// 	"encoding/binary"
-// 	"fmt"
-// 	o "github.com/aidanjjenkins/compiler/object"
-// 	"io"
-// 	"os"
-// 	"slices"
-// )
-//
-// func encode(obj o.Obj) []byte {
-// 	switch obj := obj.(type) {
-// 	case *o.TableName:
-// 		return encodeString(obj.Value)
-// 	case *o.ColCell:
-// 		cell := encodeString(obj.Name)
-// 		cell = append(cell, encodeString(obj.ColType)...)
-// 		cell = append(cell, encodeBool(obj.Index))
-// 		cell = append(cell, encodeBool(obj.Unique))
-// 		cell = append(cell, encodeBool(obj.Pk))
-// 		return cell
-// 	case *o.Col:
-// 		return encodeString(obj.Value)
-// 	}
-// 	return nil
-// }
-//
-// func encodeString(s string) []byte {
-// 	encodedBytes := []byte(s)
-// 	encodedBytes = append(encodedBytes, 0x00)
-// 	return encodedBytes
-// }
-//
-// func encodeBool(b bool) byte {
-// 	if b {
-// 		return 0xFF
-// 	}
-// 	return 0xFD
-// }
-//
-// func (vm *VM) executeRowWrite(numVals int) {
-// 	write := []byte{}
-// 	for numVals > 0 {
-// 		val := vm.pop()
-// 		if v, ok := val.(*o.EncodedVal); ok {
-// 			write = append(v.Val, write...)
-// 		}
-//
-// 		numVals -= 1
-// 	}
-//
-// 	tName := getTableName(write)
-// 	err := vm.incrememntRowCount(tName)
-// 	if err != nil {
-// 		fmt.Println("error: ", err)
-// 		return
-// 	}
-//
-// 	l := len(write)
-// 	// do i need this big of a row length?
-// 	lenBuf := make([]byte, RowLen)
-// 	binary.LittleEndian.PutUint32(lenBuf, uint32(l))
-// 	write = append(lenBuf, write...)
-// 	writeRowWithoutIndex(write, RowsFile)
-// }
-//
-// func (vm *VM) executeAddIndex(tName string) {
-// 	table := vm.FindTable(tName)
-// 	count := DecodeTableCount(table)
-// 	cols := []string{}
-// 	for vm.sp > 0 {
-// 		val := vm.pop()
-// 		switch v := val.(type) {
-// 		case *o.Col:
-// 			cols = append(cols, v.Value)
-// 		}
-// 	}
-//
-// 	vm.markAsIndex(tName, cols)
-// 	decodedTable := DecodeBytes(table)
-// 	coldIdxs := getColIdxFromTable(decodedTable, cols)
-//
-// 	if count > 0 {
-// 		vm.addExistingRowsToIndex(tName, coldIdxs, count)
-// 	}
-// }
-//
-// func (vm *VM) addExistingRowsToIndex(tName string, colIdx []int, count int) error {
-// 	// offset := 0
-// 	file, err := os.Open(RowsFile)
-// 	if err != nil {
-// 		fmt.Printf("Error opening file: %v\n", err)
-// 		return nil
-// 	}
-// 	defer file.Close()
-//
-// 	rowsChecked := 0
-// 	for {
-//
-// 		if rowsChecked >= count {
-// 			fmt.Println("checked all rows in table")
-// 			break
-// 		}
-// 		offset, err := file.Seek(0, io.SeekCurrent)
-// 		if err != nil {
-// 			fmt.Printf("Error getting offset: %v\n", err)
-// 			return nil
-// 		}
-//
-// 		lengthBytes := make([]byte, 8)
-// 		_, err = file.Read(lengthBytes)
-// 		if err != nil {
-// 			if err.Error() == "EOF" {
-// 				break
-// 			}
-// 			fmt.Printf("Error reading length: %v\n", err)
-// 			return nil
-// 		}
-//
-// 		rowLength := binary.LittleEndian.Uint32(lengthBytes)
-//
-// 		rowData := make([]byte, rowLength)
-// 		_, err = file.Read(rowData)
-// 		if err != nil {
-// 			fmt.Printf("Error reading row: %v\n", err)
-// 			return nil
-// 		}
-//
-// 		decoded := DecodeBytes(rowData)
-// 		if decoded[0] != tName {
-// 			continue
-// 		}
-//
-// 		if decoded[0] == tName {
-// 			for i := range colIdx {
-//
-// 				vm.Pool.Add(decoded[colIdx[i]], uint32(offset))
-// 			}
-//
-// 		}
-// 	}
-//
-// 	return nil
-// }
-//
-// func (vm *VM) markAsIndex(tName string, cols []string) {
-// 	offset, ok := vm.Pool.Search(tName)
-// 	decoded := []string{}
-// 	if !ok {
-// 		fmt.Println("Table not found")
-// 		return
-// 	} else {
-// 		row, err := readRow(int64(offset), TableFile)
-// 		if err != nil {
-// 			fmt.Println("Error finding table: ", err)
-// 		}
-//
-// 		decoded = DecodeBytes(row)
-// 	}
-//
-// 	for i := range cols {
-// 		idx := slices.Index(decoded, cols[i])
-// 		decoded[idx+2] = "true"
-// 	}
-//
-// 	buf := []byte{}
-// 	for i := range decoded {
-// 		if decoded[i] == "false" {
-// 			b := encodeBool(false)
-// 			buf = append(buf, b)
-// 		} else if decoded[i] == "true" {
-// 			b := encodeBool(true)
-// 			buf = append(buf, b)
-// 		} else {
-// 			encoded := encodeString(decoded[i])
-// 			buf = append(buf, encoded...)
-// 		}
-// 	}
-//
-// 	file, err := os.OpenFile(TableFile, os.O_RDWR, 0644)
-// 	if err != nil {
-// 		fmt.Println("Error opening table file: ", err)
-// 	}
-// 	defer file.Close()
-//
-// 	_, err = file.WriteAt(buf, int64(offset)+int64(RowLen))
-// 	if err != nil {
-// 		fmt.Println("Error writing table file: ", err)
-// 	}
-// }
-//
-// func writeRowWithoutIndex(data []byte, filename string) error {
-// 	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer file.Close()
-//
-// 	_, err = file.Write(data)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	return nil
-// }
-//
-// func (vm *VM) incrememntRowCount(tName string) error {
-// 	offset, ok := vm.Pool.Search(tName)
-// 	if !ok {
-// 		return fmt.Errorf("Table not found")
-// 	} else {
-// 		row, err := readRow(int64(offset), TableFile)
-// 		if err != nil {
-// 			fmt.Println("Error finding table: ", err)
-// 		}
-//
-// 		count := DecodeTableCount(row)
-// 		count++
-//
-// 		updateCount := make([]byte, RowLen)
-// 		binary.LittleEndian.PutUint32(updateCount, uint32(count))
-//
-// 		row = row[:len(row)-RowLen]
-// 		row = append(row, updateCount...)
-//
-// 		file, err := os.OpenFile(TableFile, os.O_RDWR, 0644)
-// 		if err != nil {
-// 			fmt.Printf("Failed to open file: %v", err)
-// 		}
-// 		defer file.Close()
-//
-// 		_, err = file.WriteAt(row, int64(offset)+RowLen)
-// 		if err != nil {
-// 			fmt.Printf("Failed to open file: %v", err)
-// 		}
-//
-// 	}
-//
-// 	return nil
-// }
-//
-// func writeRow(data []byte, filename string) (uint32, error) {
-// 	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	defer file.Close()
-//
-// 	fileInfo, err := file.Stat()
-// 	fileLen := fileInfo.Size()
-//
-// 	_, err = file.Write(data)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-//
-// 	return uint32(fileLen), nil
-// }
-//
-// // should be nicer way to insert tablename into index probably
-// func (vm *VM) executeTableWrite(numVals int) error {
-// 	write := []byte{}
-// 	for numVals > 0 {
-// 		val := vm.pop()
-// 		if v, ok := val.(*o.EncodedVal); ok {
-// 			write = append(v.Val, write...)
-// 		}
-//
-// 		numVals -= 1
-// 	}
-//
-// 	count := make([]byte, RowLen)
-// 	binary.LittleEndian.PutUint32(count, uint32(0))
-// 	write = append(write, count...)
-//
-// 	tName := getTableName(write)
-//
-// 	l := len(write)
-// 	lenBuf := make([]byte, RowLen)
-// 	binary.LittleEndian.PutUint32(lenBuf, uint32(l))
-// 	write = append(lenBuf, write...)
-//
-// 	offset, err := writeRow(write, TableFile)
-// 	if err != nil {
-// 		return fmt.Errorf("Error writing table to disk")
-// 	}
-//
-// 	fmt.Println("tname: ", tName)
-// 	vm.Pool.Add(tName, offset)
-// 	return nil
-// }
-//
-// func (vm *VM) createTableObj(name string) *o.TableInfo {
-// 	tObj := &o.TableInfo{Name: name}
-//
-// 	return tObj
-// }
-//
-// func (vm *VM) colCheck() {
-// 	fmt.Println("cols")
-// }
-//
-// func (vm *VM) insertVals() {
-// 	fmt.Println("vals")
-// }
+import (
+	// "encoding/binary"
+	"encoding/binary"
+	"fmt"
+	"slices"
+
+	"github.com/aidanjjenkins/compiler/code"
+)
+
+func (vm *VM) createTableObj(name string) *code.TableInfo {
+	tObj := &code.TableInfo{Name: name}
+	offset, ok := vm.Pool.Search(name)
+	decoded := []string{}
+	if !ok {
+		fmt.Println("Table not found")
+		return nil
+	} else {
+		row, err := readRow(int64(offset), TableFile)
+		if err != nil {
+			fmt.Println("Error finding table: ", err)
+		}
+
+		decoded = DecodeBytes(row)
+	}
+
+	tObj.Cols = getColInfo(decoded[1:])
+	tObj.Marker = make([]int, len(tObj.Cols))
+	nullArr := createNullArrays(len(tObj.Cols))
+	tObj.Write = nullArr
+	tObj.ColCounter = 0
+	tObj.ValCounter = 0
+	return tObj
+}
+
+func getColInfo(cols []string) []*code.ColCell {
+	res := []*code.ColCell{}
+	i := 0
+	j := 5
+
+	for j <= len(cols) {
+		col := cols[i:j]
+		newCell := &code.ColCell{}
+		newCell.Name = col[0]
+		newCell.ColType = col[1]
+		if col[2] == "false" {
+			newCell.Index = false
+		} else {
+			newCell.Index = true
+		}
+		if col[3] == "false" {
+			newCell.Unique = false
+		} else {
+			newCell.Unique = true
+		}
+		if col[4] == "false" {
+			newCell.Pk = false
+		} else {
+			newCell.Pk = true
+		}
+
+		res = append(res, newCell)
+		i += 5
+		j += 5
+	}
+
+	return res
+}
+
+func (vm *VM) colCheck(col string, table *code.TableInfo) {
+	for i := range table.Cols {
+		if table.Cols[i].Name == col {
+			table.ColCounter++
+			table.Marker[i] = table.ColCounter
+			break
+		}
+	}
+}
+
+// this should take an literal obj instead of a string eventually
+// that way you can do type checking to make sure the value matches up with the col info
+// you can use the table marker to index the table info and check colcells coltype
+func (vm *VM) insertVals(value string, table *code.TableInfo) {
+	table.ValCounter++
+	if table.ColCounter == 0 {
+		encoded := encodeString(value)
+		table.Write[table.ValCounter-1] = encoded
+	} else {
+		idx := slices.Index(table.Marker, table.ValCounter)
+
+		encoded := encodeString(value)
+		table.Write[idx] = encoded
+	}
+}
+
+func createNullArrays(size int) [][]byte {
+	result := make([][]byte, size)
+	for i := 0; i < size; i++ {
+		result[i] = []byte{0xFE}
+	}
+	return result
+}
+
+// should look through the table object to see if any of the cols are
+// can eventually do the same for unique and non null
+func (vm *VM) write(table *code.TableInfo) {
+	toWrite := []byte{}
+
+	tName := encodeString(table.Name)
+	toWrite = append(toWrite, tName...)
+
+	for i := range table.Write {
+		toWrite = append(toWrite, table.Write[i]...)
+	}
+
+	l := len(toWrite)
+
+	// do i need this big of a row length?
+	lenBuf := make([]byte, RowLen)
+	binary.LittleEndian.PutUint32(lenBuf, uint32(l))
+	toWrite = append(lenBuf, toWrite...)
+
+	writeRowWithoutIndex(toWrite, RowsFile)
+
+	err := vm.incrememntRowCount(table.Name)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return
+	}
+}
